@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+*.bak
+*.installing
+.DS_Store
+.env
+.env.*
+!.env.example
+outline.json
+settings.json
+keybindings.json

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "yozniax.flolinr",
+  "name": "Flolinr",
+  "version": "0.10.0",
+  "author": "yozniax",
+  "license": "MIT",
+  "description": "A quiet, keyboard-first outliner for the Omarchy shell.",
+  "kinds": [
+    "panel",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Outliner.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Flolinr",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
