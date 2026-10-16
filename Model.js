@@ -59,6 +59,36 @@ function move(nodes, i, direction) {
     nodes.splice.apply(nodes, [direction > 0 ? target - branch.length : target, 0].concat(branch));
     return true;
 }
+// Insert on the next visible row. Expanded children keep their original parent.
+function splitNode(nodes, i, start, end, zoomed) {
+    if (i < 0 || i >= nodes.length) throw new Error("Item not found");
+    var original = nodes[i], text = original.text;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > text.length)
+        throw new Error("Invalid split position");
+    var branchEnd = endOf(nodes, i);
+    var insertChild = branchEnd > i + 1 && (!original.collapsed || zoomed);
+    var next = node(text.slice(end), original.depth + (insertChild ? 1 : 0));
+    next.color = original.color || "default";
+    var prefix = text.slice(0, start);
+    if (original.text !== prefix) { original.text = prefix; touch([original]); }
+    nodes.splice(insertChild ? i + 1 : branchEnd, 0, next);
+    return next.id;
+}
+// Join a visible predecessor, preserving and reparenting the removed item's children.
+function mergeNode(nodes, i, previousId) {
+    var p = indexOf(nodes, previousId);
+    if (i <= 0 || i >= nodes.length || p < 0 || p >= i) return null;
+    for (var j = p + 1; j < i; j++) if (nodes[j].depth <= nodes[p].depth) return null;
+    var current = nodes[i], previous = nodes[p], position = previous.text.length;
+    var end = endOf(nodes, i), delta = previous.depth - current.depth;
+    var descendants = nodes.slice(i + 1, end);
+    descendants.forEach(function(n) { n.depth += delta; });
+    previous.text += current.text;
+    previous.collapsed = false;
+    touch([previous].concat(descendants));
+    nodes.splice(i, 1);
+    return {id: previous.id, position: position};
+}
 function validate(data) {
     if (!data || data.version !== 1 || !Array.isArray(data.nodes)) throw new Error("Unsupported document");
     var ids = {};
@@ -267,4 +297,27 @@ function applyBranch(nodes, id, before, replacement) {
     var result = nodes.slice(0, i).concat(parsed, nodes.slice(endOf(nodes, i)));
     validate({version: 1, nodes: result});
     return result;
+}
+
+// AI follows the right-hand body: current Roll, or the entire zoomed branch.
+function scopeSnapshot(nodes, zoom) {
+    return zoom ? branchSnapshot(nodes, zoom) : JSON.stringify(nodes);
+}
+function applyScope(nodes, zoom, before, replacement) {
+    if (scopeSnapshot(nodes, zoom) !== before) throw new Error("The displayed outline changed. Generate a new preview.");
+    if (zoom) return applyBranch(nodes, zoom, before, replacement);
+    var parsed = importMarkdown(replacement, "AI preview").nodes;
+    if (!parsed.length) throw new Error("AI preview must contain at least one bullet item");
+    validate({version: 1, nodes: parsed});
+    return parsed;
+}
+
+function importOutline(items, name) {
+    if (!Array.isArray(items)) throw new Error("Invalid imported outline");
+    var nodes = items.map(function(item) {
+        if (!item || typeof item.text !== "string" || !Number.isInteger(item.depth)) throw new Error("Invalid imported item");
+        return node(item.text, item.depth);
+    });
+    validate({version: 1, nodes: nodes});
+    return createRoll(name || "Imported Roll", nodes);
 }

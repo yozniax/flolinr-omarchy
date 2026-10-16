@@ -59,7 +59,7 @@ var descriptions = {
     "renameRoll": "Rename the current Roll",
     "archive": "Archive / restore the current Roll",
     "deleteRoll": "Confirm deletion of an archived Roll",
-    "focusCalendar": "Focus the nested calendar list",
+    "focusCalendar": "Open the calendar",
     "emoji": "Choose an emoji icon for this Roll",
     "focusRolls": "Switch focus between Rolls and editor",
     "zoomHome": "Return to the Roll root",
@@ -84,4 +84,35 @@ var descriptions = {
 function label(bindings, id) { return bindings[id] || "Disabled"; }
 function helpRows(bindings) {
     return Object.keys(defaults).map(function(id) { return [label(bindings, id), descriptions[id]]; });
+}
+
+function helpSections(bindings) {
+    function actions(ids) { return ids.map(function(id) { return [label(bindings, id), descriptions[id]]; }); }
+    return [
+        {title: "Writing & editing", rows: [
+            ["Enter", "Insert immediately below; move the remaining text to the new item"],
+            ["Shift+Enter", "Insert a line break within the item"],
+            ["Backspace at start", "Join the item above; place the cursor at the join"],
+            ["Tab / Shift+Tab", "Indent / outdent the item and its children"],
+            ["Alt+Up / Alt+Down", "Reorder a branch among its siblings"]
+        ].concat(actions(["undo", "redo", "addItem"]))},
+        {title: "Cursor movement & zoom", rows: [
+            ["Up / Down", "Move through text; cross items at the first / last visual line"],
+            ["Left / Right", "Cross items at the beginning / end of text"]
+        ].concat(actions(["previousNode", "nextNode", "zoomIn", "zoomOut", "zoomHome", "fold", "focusRolls"]))},
+        {title: "Rolls", rows: actions(["newRoll", "renameRoll", "previousRoll", "nextRoll", "archive", "deleteRoll", "emoji"])},
+        {title: "Daily notes & calendar", rows: actions(["today", "calendar", "focusCalendar"])},
+        {title: "Search", rows: actions(["search"]).concat([
+            ["Up / Down in search", "Select a result"],
+            ["Enter / Esc in search", "Open the selected result / close search"]
+        ])},
+        {title: "Color & information", rows: actions(["color", "timestamps"])},
+        {title: "Save, window & help", rows: actions(["save", "close", "help"]).concat([["Esc", "Close the current dialog"]])},
+        {title: "Mouse", rows: [
+            ["Click a bullet", "Zoom into the item"],
+            ["Right-click a bullet", "Choose a node color"],
+            ["Click a triangle", "Collapse / expand children"],
+            ["Click a breadcrumb", "Return to a parent or Home"]
+        ]}
+    ];
 }
