@@ -10,7 +10,13 @@ Item {
     signal colorRequested(string nodeId)
     required property var modelData
     height: Math.max(23, editor.contentHeight)
-    function edit() { editor.forceActiveFocus(); editor.cursorPosition = editor.length; }
+    function edit(target) {
+        editor.forceActiveFocus();
+        if (target && target.x !== undefined) {
+            var edge = editor.positionToRectangle(target.direction > 0 ? 0 : editor.length);
+            editor.cursorPosition = editor.positionAt(target.x, edge.y + edge.height / 2);
+        } else editor.cursorPosition = target && target.position !== undefined ? Math.min(target.position, editor.length) : editor.length;
+    }
     Rectangle {
         anchors.fill: parent
         radius: 4
@@ -46,6 +52,7 @@ Item {
     }
     TextArea {
         id: editor
+        objectName: "outlineEditor"
         x: row.modelData.depth * 24 + 40
         width: parent.width - x
         height: Math.max(23, contentHeight)
@@ -78,12 +85,34 @@ Item {
         Keys.onPressed: function(event) {
             if (inputMethodComposing) return;
             var kind = "", dir = 0;
-            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) kind = "add";
-            else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+            var plain = !(event.modifiers & (Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier));
+            if (plain && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
+                event.accepted = true;
+                row.controller.splitItem(row.modelData.id, selectionStart, selectionEnd);
+                return;
+            }
+            if (plain && event.key === Qt.Key_Backspace && cursorPosition === 0 && selectionStart === selectionEnd) {
+                event.accepted = true;
+                row.controller.mergeItem(row.modelData.id);
+                return;
+            }
+            if (plain && selectionStart === selectionEnd) {
+                var caret = positionToRectangle(cursorPosition);
+                var up = event.key === Qt.Key_Up && caret.y <= positionToRectangle(0).y + 1;
+                var down = event.key === Qt.Key_Down && caret.y >= positionToRectangle(length).y - 1;
+                var left = event.key === Qt.Key_Left && cursorPosition === 0;
+                var right = event.key === Qt.Key_Right && cursorPosition === length;
+                if (up || down || left || right) {
+                    var direction = up || left ? -1 : 1;
+                    var target = up || down ? {x: caret.x, direction: direction} : {position: left ? 2147483647 : 0};
+                    if (row.controller.navigateFrom(row.modelData.id, direction, target)) { event.accepted = true; return; }
+                }
+            }
+            if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
                 kind = "indent"; dir = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier) ? -1 : 1;
             } else if ((event.modifiers & Qt.AltModifier) && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
                 kind = "move"; dir = event.key === Qt.Key_Up ? -1 : 1;
-            } else if (event.key === Qt.Key_Backspace && text === "") kind = "delete";
+            }
             if (kind) { event.accepted = true; row.controller.action(row.modelData.id, kind, dir); }
         }
     }

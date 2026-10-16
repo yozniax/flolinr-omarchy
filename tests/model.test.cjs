@@ -219,3 +219,76 @@ test('persistence flags v1 migration without translating user content',()=>{
  assert.equal(loaded.workspace.version,2);
  assert.equal(shape(loaded.workspace.rolls[0].nodes),shape(outline()));
 });
+
+test('Enter splits immediately below an expanded parent without changing existing child parentage', () => {
+ const n=outline(); n[0].text='前半後半'; n[0].color='purple';
+ const before=JSON.stringify(n); const id=m.splitNode(n,0,2,2);
+ assert.equal(n[0].text,'前半'); assert.equal(n[1].id,id); assert.equal(n[1].text,'後半');
+ assert.equal(n[1].depth,1); assert.equal(n[1].color,'purple');
+ assert.equal(shape(n.filter(x=>x.id!==id)),shape(outline()));
+ m.validate({version:1,nodes:n});
+ assert.equal(JSON.parse(before)[0].text,'前半後半');
+});
+test('split handles beginning, end, empty nodes, selection replacement and multiline suffix', () => {
+ for (const [text,start,end,prefix,suffix] of [['abc',0,0,'','abc'],['abc',3,3,'abc',''],['',0,0,'',''],['abcdef',2,4,'ab','ef'],['one\ntwo',2,2,'on','e\ntwo'],['😀日本語',2,2,'😀','日本語']]) {
+  const n=[m.node(text,0)]; const originalId=n[0].id;
+  const id=m.splitNode(n,0,start,end);
+  assert.equal(n[0].text,prefix); assert.equal(n[0].id,originalId);
+  assert.equal(n[1].text,suffix); assert.equal(n[1].id,id);
+  m.validate({version:1,nodes:n});
+ }
+});
+
+test('Backspace joins previous text at the seam and preserves destination metadata', () => {
+ const n=[m.node('前半',0),m.node('後半',0)]; n[0].color='blue';
+ const first=n[0].id,created=n[0].createdAt;
+ const joined=m.mergeNode(n,1,first);
+ assert.equal(n.length,1); assert.equal(n[0].text,'前半後半');
+ assert.equal(joined.id,first); assert.equal(joined.position,2);
+ assert.equal(n[0].color,'blue'); assert.equal(n[0].createdAt,created);
+});
+test('joining siblings preserves children on both branches and opens a folded destination', () => {
+ const n=outline(); n[0].collapsed=true; n.push({id:'f',text:'f',depth:1,collapsed:false});
+ const before=JSON.stringify(n);
+ const joined=m.mergeNode(n,4,'a');
+ assert.equal(joined.id,'a'); assert.equal(n[0].text,'ae');
+ assert.equal(shape(n),'a:0,b:1,c:2,d:1,f:1'); assert.equal(n[0].collapsed,false);
+ m.validate({version:1,nodes:n});
+ assert.equal(JSON.parse(before).length,6);
+});
+test('joining into a parent or deeper preceding item reparents descendants without losing following siblings', () => {
+ const parent=outline(); m.mergeNode(parent,1,'a');
+ assert.equal(shape(parent),'a:0,c:1,d:1,e:0'); assert.equal(parent[0].text,'ab');
+ m.validate({version:1,nodes:parent});
+ const deep=outline(); deep.push({id:'f',text:'f',depth:1,collapsed:false});
+ m.mergeNode(deep,4,'d');
+ assert.equal(shape(deep),'a:0,b:1,c:2,d:1,f:2'); assert.equal(deep[3].text,'de');
+ m.validate({version:1,nodes:deep});
+});
+test('first item cannot merge and Enter followed by Backspace restores the original outline', () => {
+ const n=outline(),before=JSON.stringify(n); assert.equal(m.mergeNode(n,0,''),null); assert.equal(JSON.stringify(n),before);
+ n[0].text='abcdef'; const original=shape(n), id=m.splitNode(n,0,3,3);
+ m.mergeNode(n,m.indexOf(n,id),'a');
+ assert.equal(shape(n),original); assert.equal(n[0].text,'abcdef');
+});
+
+test('Enter on a folded branch inserts next visible sibling and leaves hidden children untouched', () => {
+ const n=outline(); n[0].collapsed=true;
+ const id=m.splitNode(n,0,1,1);
+ assert.equal(n[4].id,id); assert.equal(n[4].depth,0);
+ assert.equal(m.visible(n,'','').map(x=>x.id).join(','),'a,'+id+',e');
+ assert.equal(shape(n.filter(x=>x.id!==id)),shape(outline()));
+ m.validate({version:1,nodes:n});
+});
+test('Enter on a nested leaf inserts before the following node even when indentation changes', () => {
+ const n=outline(); const id=m.splitNode(n,2,1,1);
+ assert.equal(n[3].id,id); assert.equal(n[3].depth,2); assert.equal(n[4].id,'d');
+ m.validate({version:1,nodes:n});
+});
+test('Enter on the zoom heading inserts first child in the same zoom, even if originally folded', () => {
+ const n=outline(); n[0].collapsed=true;
+ const id=m.splitNode(n,0,1,1,true);
+ assert.equal(n[1].id,id); assert.equal(n[1].depth,1);
+ assert.equal(m.visible(n,'a','')[0].id,id);
+ m.validate({version:1,nodes:n});
+});

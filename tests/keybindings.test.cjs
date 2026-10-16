@@ -26,3 +26,15 @@ test('help uses action identity when two default keys are swapped',()=>{
  assert.equal(b.label(keys,'color'),'Disabled');
  assert.equal(rows.length,Object.keys(b.defaults).length);
 });
+
+test('categorized help includes every action once and reflects remapped or disabled shortcuts',()=>{
+ const keys=b.resolve({search:'Ctrl+S',save:'Ctrl+F',color:''});
+ const sections=b.helpSections(keys);
+ assert.equal(sections.length,8);
+ const rows=sections.flatMap(s=>s.rows);
+ for(const id of Object.keys(b.defaults)) {
+  const matches=rows.filter(r=>r[1]===b.descriptions[id]);
+  assert.equal(matches.length,1,id); assert.equal(matches[0][0],b.label(keys,id));
+ }
+ assert.ok(sections[0].rows.some(r=>r[0]==='Backspace at start'));
+});

@@ -16,9 +16,12 @@ Item {
         id: features
         editor: root
         settings: appSettings
-        onResult: function(text) { featurePanel.showResult(text); }
-        onFailure: function(text) { featurePanel.failure(text); }
+        onResult: function(text) { if (featurePanel.opened) featurePanel.showResult(text); else root.status = text; }
+        onFailure: function(text) { if (featurePanel.opened) featurePanel.failure(text); else { root.status = text; transferNotice.show("Could not complete import / export", text); } }
+        onNotice: function(text) { transferNotice.show("Import completed", text); }
         onDone: featurePanel.close()
+        onAiStatus: function(text) { featurePanel.connectionStatus(text); }
+        onAiSettingsNeeded: featurePanel.show("settings")
     }
     property string searchQuery: ""
     readonly property var searchHits: { var revision = root.revision; return Model.searchWorkspace(rolls, searchQuery); }
@@ -78,16 +81,12 @@ Item {
         commitRoll();
         var roll = Model.ensureMemopad(rolls, day);
         rolls = rolls.slice(); selectRoll(roll.id);
-        navCalendarOpen = true;
     }
     property bool navRollsOpen: true
     property bool navActiveOpen: true
     property bool navArchivedOpen: true
-    property bool navCalendarOpen: false
     property string deleteTarget: ""
     property string deleteName: ""
-    property int calendarLimit: 14
-    property var collapsedDates: ({})
     readonly property bool archived: {
         var revision = root.revision;
         var i = Model.indexOf(rolls, activeRollId);
@@ -95,10 +94,6 @@ Item {
     }
     readonly property var liveRolls: { var revision = root.revision; return rolls.filter(function(r) { return !r.archived && !r.memopadDate; }); }
     readonly property var archivedRolls: { var revision = root.revision; return rolls.filter(function(r) { return r.archived === true; }); }
-    readonly property var calendarTree: {
-        var revision = root.revision;
-        return Model.calendarTree(rolls, calendarLimit, collapsedDates, calendarMode, true);
-    }
     function toggleArchive() {
         var i = Model.indexOf(rolls, activeRollId);
         if (!ready || i < 0 || rolls[i].memopadDate) return;
@@ -118,11 +113,6 @@ Item {
         rolls = remaining;
         delete rollStates[deleteTarget]; deleteTarget = ""; changed(); save(); deleteDialog.close();
     }
-    function activateDate(item) {
-        if (!item) return;
-        if (item.kind === "day") { calendarDate = new Date(item.key + "T12:00:00"); openMemopad(item.key); }
-        else { var next = Object.assign({}, collapsedDates); next[item.key] = !item.closed; collapsedDates = next; }
-    }
     readonly property string rollIcon: {
         var revision = root.revision;
         var i = Model.indexOf(rolls, activeRollId);
@@ -141,7 +131,7 @@ Item {
         var revision = root.revision;
         return Model.activity(rolls, selectedDay, calendarMode);
     }
-    readonly property bool editingAllowed: ready && !searchDialog.opened && !deleteDialog.opened && !helpDialog.opened && !rollDialog.opened && !calendarDialog.opened && !infoDialog.opened && !iconDialog.opened && !colorMenu.opened && !featurePanel.opened && !capture.opened
+    readonly property bool editingAllowed: ready && !searchDialog.opened && !deleteDialog.opened && !helpDialog.opened && !rollDialog.opened && !calendarDialog.opened && !infoDialog.opened && !iconDialog.opened && !colorMenu.opened && !featurePanel.opened && !capture.opened && !fileTransfer.opened && !transferNotice.opened
     function focusNode(id) { refresh(id || (rows.length ? rows[0].id : "")); }
     function prepareInput() {
         if (!ready) return;
@@ -158,6 +148,47 @@ Item {
         if (!rows.length) {
             snapshot(); var input = Model.ensureInput(nodes, zoom); changed(); refresh(input.id);
         } else focusNode(rows[rows.length - 1].id);
+    }
+    function navigateFrom(id, direction, target) {
+        var i = Model.indexOf(rows, id), next = i + direction;
+        if (id === zoom && direction > 0 && rows.length) next = 0;
+        else if (i < 0 || next >= rows.length) return false;
+        if (next < 0) {
+            if (!zoom) return false;
+            zoomTitle.forceActiveFocus();
+            if (target && target.x !== undefined) {
+                var edge = zoomTitle.positionToRectangle(zoomTitle.length);
+                zoomTitle.cursorPosition = zoomTitle.positionAt(target.x, edge.y + edge.height / 2);
+            } else zoomTitle.cursorPosition = zoomTitle.length;
+            return true;
+        }
+        refresh(rows[next].id, target);
+        return true;
+    }
+    function mergeItem(id) {
+        if (!ready || query) return;
+        var rowIndex = Model.indexOf(rows, id);
+        var previousId = rowIndex > 0 ? rows[rowIndex - 1].id : (rowIndex === 0 ? zoom : "");
+        var i = Model.indexOf(nodes, id), p = Model.indexOf(nodes, previousId);
+        if (i <= 0 || p < 0 || p >= i) return;
+        snapshot();
+        var joined = Model.mergeNode(nodes, i, previousId);
+        if (!joined) { undoStack = undoStack.slice(0, -1); return; }
+        changed();
+        if (joined.id === zoom) {
+            refresh();
+            zoomTitle.forceActiveFocus(); zoomTitle.cursorPosition = joined.position;
+        } else refresh(joined.id, {position: joined.position});
+    }
+    function splitItem(id, start, end) {
+        if (!ready || query) return;
+        var i = Model.indexOf(nodes, id);
+        if (i < 0) return;
+        snapshot();
+        var parent = Model.parentOf(nodes, i);
+        var nextId = Model.splitNode(nodes, i, start, end, id === zoom);
+        if (id === zoom && nodes[Model.indexOf(nodes, nextId)].depth === nodes[i].depth) zoom = parent < 0 ? "" : nodes[parent].id;
+        changed(); refresh(nextId, {position: 0});
     }
     function navigate(direction) {
         var i = Model.indexOf(rows, focusedNode);
@@ -285,9 +316,11 @@ Item {
         try { payload = JSON.parse(payloadJson || "{}"); } catch (e) {}
         closingFromHost = false;
         if (payload.mode === "capture") { capture.open(); return; }
-        if (window.visible) return;
-        window.visible = true;
-        if (ready) prepareInput();
+        if (!window.visible) {
+            window.visible = true;
+            if (ready) prepareInput();
+        }
+        if (payload.mode === "settings") Qt.callLater(function() { featurePanel.show("settings"); });
     }
     function close() {
         closingFromHost = true;
@@ -301,14 +334,15 @@ Item {
         else close();
     }
     function toggle() { if (opened) close(); else open(); }
-    function refresh(focusId) {
+    function refresh(focusId, cursorTarget) {
         if (zoom && Model.indexOf(nodes, zoom) < 0) zoom = "";
         rows = Model.visible(nodes, zoom, query);
         if (focusId) {
-            pendingFocus = focusId; focusAttempts = 0; focusRetry.restart();
+            pendingFocus = focusId; pendingCursor = cursorTarget || null; focusAttempts = 0; focusRetry.restart();
         }
     }
     property string pendingFocus: ""
+    property var pendingCursor: null
     property int focusAttempts: 0
     Timer {
         id: focusRetry
@@ -320,7 +354,7 @@ Item {
             list.positionViewAtIndex(i, ListView.Contain);
             list.forceLayout();
             var item = list.itemAtIndex(i);
-            if (item && window.visible && root.editingAllowed) { item.edit(); root.pendingFocus = ""; }
+            if (item && window.visible && root.editingAllowed) { item.edit(root.pendingCursor); root.pendingFocus = ""; }
             else if (++root.focusAttempts < 10) restart();
             else root.pendingFocus = "";
         }
@@ -435,14 +469,29 @@ Item {
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.today; enabled: root.editingAllowed; onActivated: root.openMemopad(root.todayKey); }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.archive; enabled: root.editingAllowed; onActivated: root.toggleArchive(); }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.deleteRoll; enabled: root.editingAllowed && root.archived; onActivated: root.requestDelete(); }
-        Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.focusCalendar; enabled: root.editingAllowed; onActivated: { root.navCalendarOpen = true; dateList.forceActiveFocus(); } }
+        Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.focusCalendar; enabled: root.editingAllowed; onActivated: root.showCalendar(); }
         FeaturePanel { id: featurePanel; controller: features }
-        Dialog {
+        FileTransfer { id: fileTransfer; controller: features }
+        CompactDialog {
+            id: transferNotice
+            parent: Overlay.overlay
+            anchors.centerIn: parent
+            width: Math.min(460, window.width - 32)
+            modal: true
+            focus: true
+            standardButtons: Dialog.NoButton
+            property string message: ""
+            onClosed: if (root.ready) root.focusNode(root.focusedNode || (root.nodes.length ? root.nodes[0].id : ""))
+            function show(title, text) { transferNotice.title = title; message = text; open(); }
+            contentItem: Label { text: transferNotice.message; wrapMode: Text.WordWrap; }
+            footer: ActionLink { text: "Close · Esc"; onClicked: transferNotice.close(); }
+        }
+        CompactDialog {
             id: searchDialog
             parent: Overlay.overlay
             anchors.centerIn: parent
-            width: Math.min(720, window.width - 32)
-            height: Math.min(570, window.height - 32)
+            width: Math.min(600, window.width - 32)
+            height: Math.min(440, window.height - 32)
             title: "Search all Rolls and daily notes"
             modal: true; focus: true
             standardButtons: Dialog.NoButton
@@ -477,7 +526,7 @@ Item {
                 }
             }
         }
-        Dialog {
+        CompactDialog {
             id: deleteDialog
             parent: Overlay.overlay
             anchors.centerIn: parent
@@ -486,7 +535,7 @@ Item {
             modal: true; focus: true
             standardButtons: Dialog.NoButton
             contentItem: Column {
-                spacing: 18
+                spacing: 12
                 Label { width: parent.width; text: "Permanently delete “" + root.deleteName + "” and all its items? This cannot be undone."; wrapMode: Text.WordWrap; }
                 Row {
                     spacing: 12
@@ -495,12 +544,12 @@ Item {
                 }
             }
         }
-        Dialog {
+        CompactDialog {
             id: iconDialog
             parent: Overlay.overlay
             anchors.centerIn: parent
             width: Math.min(400, window.width - 32)
-            height: Math.min(420, window.height - 32)
+            height: Math.min(360, window.height - 32)
             title: "Roll icon"
             modal: true; focus: true
             standardButtons: Dialog.NoButton
@@ -511,9 +560,9 @@ Item {
                 GridView {
                     id: iconGrid
                     width: parent.width
-                    height: 204
+                    height: 168
                     cellWidth: width / 6
-                    cellHeight: 48
+                    cellHeight: 38
                     clip: true
                     currentIndex: 0
                     keyNavigationEnabled: true
@@ -524,10 +573,10 @@ Item {
                     delegate: ActionLink {
                         required property string modelData
                         width: iconGrid.cellWidth - 4
-                        height: 44
+                        height: 34
                         text: modelData
                         font.family: "Noto Color Emoji"
-                        font.pixelSize: 25
+                        font.pixelSize: 21
                         flat: true
                         highlighted: GridView.isCurrentItem && iconGrid.activeFocus
                         onClicked: root.setRollIcon(modelData)
@@ -541,7 +590,7 @@ Item {
                 Label { text: "Arrow keys to choose · Enter to apply · Esc to close"; font.pixelSize: 11; opacity: 0.55; }
             }
         }
-        Dialog {
+        CompactDialog {
             id: infoDialog
             parent: Overlay.overlay
             anchors.centerIn: parent
@@ -552,13 +601,13 @@ Item {
             footer: ActionLink { text: "Close · Esc"; onClicked: infoDialog.reject(); }
             contentItem: Label { id: infoText; wrapMode: Text.WordWrap; }
         }
-        Dialog {
+        CompactDialog {
             id: calendarDialog
             parent: Overlay.overlay
             anchors.centerIn: parent
-            width: Math.min(660, window.width - 32)
-            height: Math.min(720, window.height - 32)
-            title: "Daily notes and Roll activity"
+            width: Math.min(400, window.width - 32)
+            height: Math.min(460, window.height - 32)
+            title: "Calendar"
             modal: true; focus: true
             standardButtons: Dialog.NoButton
             footer: ActionLink { text: "Close · Esc"; onClicked: calendarDialog.reject(); }
@@ -568,7 +617,7 @@ Item {
             Column {
                 id: calendarKeys
                 width: calendarScroll.availableWidth
-                spacing: 8
+                spacing: 5
                 focus: true
                 Keys.priority: Keys.BeforeItem
                 Keys.onPressed: function(event) {
@@ -589,7 +638,7 @@ Item {
                 Row {
                     spacing: 4
                     ActionLink { text: "‹"; onClicked: root.shiftDate(0, -1); }
-                    Label { text: Qt.formatDate(root.calendarDate, "MMMM yyyy"); width: 180; height: 36; verticalAlignment: Text.AlignVCenter; }
+                    Label { text: Qt.formatDate(root.calendarDate, "MMMM yyyy"); width: 132; height: 26; verticalAlignment: Text.AlignVCenter; }
                     ActionLink { text: "›"; onClicked: root.shiftDate(0, 1); }
                     ActionLink { text: "Today"; onClicked: root.calendarDate = new Date(); }
 
@@ -599,7 +648,7 @@ Item {
                     width: parent.width
                     Repeater {
                         model: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-                        Label { required property string modelData; width: calendarKeys.width / 7; height: 24; text: modelData; horizontalAlignment: Text.AlignHCenter; }
+                        Label { required property string modelData; width: calendarKeys.width / 7; height: 18; text: modelData; horizontalAlignment: Text.AlignHCenter; }
                     }
                     Repeater {
                         model: Model.calendarDays(root.calendarDate.getFullYear(), root.calendarDate.getMonth())
@@ -607,7 +656,7 @@ Item {
                             id: dayButton
                             required property var modelData
                             width: calendarKeys.width / 7
-                            height: 35
+                            height: 24
                             flat: true
                             highlighted: modelData.key === root.selectedDay
                             opacity: modelData.current ? 1 : 0.35
@@ -622,18 +671,18 @@ Item {
                         }
                     }
                 }
-                Label { text: "DAILY NOTE"; font.pixelSize: 11; opacity: 0.6; }
+                Label { text: "DAILY NOTE"; font.pixelSize: 10; opacity: 0.5; }
                 ActionLink {
                     width: parent.width
                     text: "📝  Daily note · " + root.selectedDay + (root.selectedMemopads.length ? "" : " · Create")
                     flat: true
                     onClicked: { calendarDialog.close(); root.openMemopad(root.selectedDay); }
                 }
-                Label { text: "ROLL ACTIVITY · " + root.selectedDay + " · " + root.dayActivity.length + " items"; font.bold: true; }
+                Label { text: "ROLL ACTIVITY · " + root.selectedDay + " · " + root.dayActivity.length + " items"; font.pixelSize: 10; opacity: 0.6; }
                 ListView {
                     id: activityList
                     width: parent.width
-                    height: Math.max(90, calendarDialog.availableHeight - 510)
+                    height: Math.min(72, Math.max(24, root.dayActivity.length * 24))
                     clip: true
                     model: root.dayActivity
                     currentIndex: count ? 0 : -1
@@ -641,6 +690,9 @@ Item {
                     delegate: ItemDelegate {
                         required property var modelData
                         width: ListView.view.width
+                        height: 24
+                        font.pixelSize: 11
+                        font.weight: Font.Light
                         text: modelData.rollName + " / " + modelData.text
                         highlighted: ListView.isCurrentItem
                         onClicked: root.openActivity(modelData)
@@ -649,15 +701,15 @@ Item {
                 }
                 Label {
                     width: parent.width
-                    text: "Arrows: date · PgUp/PgDn: month · T: today\nCtrl+↑↓: result · Enter: open · Esc: close\nUpdated shows each item's latest edit, not a full history. Older items may have no timestamp."
+                    text: "Arrows: date · PgUp/PgDn: month · T: today\nCtrl+↑↓: activity · Enter: open · Esc: close"
                     wrapMode: Text.WordWrap
-                    font.pixelSize: 11
-                    opacity: 0.65
+                    font.pixelSize: 10
+                    opacity: 0.5
                 }
             }
         }
         }
-        Dialog {
+        CompactDialog {
             id: rollDialog
             onClosed: if (!root.editingRollId && root.nodes.length) root.focusNode(root.nodes[0].id)
             parent: Overlay.overlay
@@ -724,21 +776,33 @@ Item {
                     anchors.fill: parent
                     anchors.margins: 12
                     spacing: 6
-                    Row {
-                        spacing: 9
+                    RowLayout {
+                        spacing: 8
                         Layout.preferredHeight: 40
-                        FlolinrIcon { width: 26; height: 26; }
-                        Column {
-                            spacing: 2
-                            Row {
-                                spacing: 0
-                                Label { text: "Flolin"; color: Commons.Color.foreground; font.pixelSize: 18; font.bold: true; }
-                                Label { text: "r"; color: "#78c58b"; font.pixelSize: 18; font.bold: true; }
-                            }
-                            Label { text: root.manifest ? root.manifest.version : "0.10.0"; color: Commons.Color.foreground; opacity: 0.4; font.pixelSize: 10; }
+                        FlolinrIcon { Layout.preferredWidth: 26; Layout.preferredHeight: 26; }
+                        Row {
+                            spacing: 0
+                            Layout.alignment: Qt.AlignVCenter
+                            Label { text: "Flolin"; color: Commons.Color.foreground; font.pixelSize: 18; font.bold: true; }
+                            Label { text: "r"; color: "#78c58b"; font.pixelSize: 18; font.bold: true; }
                         }
+                        Label {
+                            text: root.manifest ? root.manifest.version : "0.11.2"
+                            color: Commons.Color.foreground
+                            opacity: 0.4
+                            font.pixelSize: 9
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Item { Layout.fillWidth: true; }
                     }
-
+                    ActionLink {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 28
+                        text: "Today's note"
+                        enabled: root.ready
+                        highlighted: root.isMemopad && root.selectedMemopads.some(function(r) { return r.id === root.activeRollId && r.memopadDate === root.todayKey; })
+                        onClicked: root.openMemopad(root.todayKey)
+                    }
 
                     ScrollView {
                         id: navigationScroll
@@ -859,58 +923,12 @@ Item {
                         ScrollBar.vertical: ScrollBar {}
                         Label { visible: archivedList.count === 0; text: "No archived Rolls"; color: Commons.Color.foreground; opacity: 0.35; font.pixelSize: 11; }
                     }
-                ActionLink {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 26
-                    id: calendarBranch
-                        text: (root.navCalendarOpen ? "▾ " : "▸ ") + "Calendar"
-                    flat: true
-                    contentItem: Label { text: calendarBranch.text; color: Commons.Color.foreground; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter; }
-                    onClicked: root.navCalendarOpen = !root.navCalendarOpen
-                }
-                ActionLink {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 16
-                    visible: root.navCalendarOpen
-                    text: "📝  Today"
-                    onClicked: root.openMemopad(root.todayKey)
-
-
-                }
-                ListView {
-                    id: dateList
-                    visible: root.navCalendarOpen
-                    Layout.leftMargin: 16
-                    Layout.minimumHeight: 80
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(300, Math.max(80, count * 30))
-                    clip: true
-                    model: root.calendarTree.rows
-                    currentIndex: count ? 0 : -1
-                    Keys.onReturnPressed: root.activateDate(model[currentIndex])
-                    Keys.onEnterPressed: root.activateDate(model[currentIndex])
-                    ScrollBar.vertical: ScrollBar {}
-                    delegate: ItemDelegate {
-                        required property var modelData
-                        width: ListView.view.width
-                        height: 30
-                        leftPadding: modelData.depth * 12 + 4
-                        text: (modelData.kind === "day" ? "" : modelData.closed ? "▸ " : "▾ ") + modelData.label
-                        font.pixelSize: 12
-                        highlighted: ListView.isCurrentItem && dateList.activeFocus
-                        onClicked: root.activateDate(modelData)
-                    }
-                    Label { visible: dateList.count === 0; text: "No dated items yet"; color: Commons.Color.foreground; opacity: 0.4; font.pixelSize: 11; }
-                }
-                ActionLink { Layout.fillWidth: true; text: "More"; flat: true; visible: root.navCalendarOpen && root.calendarTree.total > root.calendarLimit; onClicked: root.calendarLimit += 14; }
 
                         }
                     }
 
-                    ActionLink { text: "Import Markdown"; enabled: root.ready; onClicked: featurePanel.show("import"); }
-                    ActionLink { text: "Export Markdown"; enabled: root.ready; onClicked: featurePanel.show("export"); }
-                    ActionLink { text: "AI · selected branch"; enabled: root.ready && !!(root.focusedNode || root.zoom); onClicked: featurePanel.show("ai"); }
-                    ActionLink { text: "Activity calendar"; enabled: root.ready; onClicked: root.showCalendar(); }
+                    ActionLink { text: "Import"; enabled: root.ready && !features.busy; onClicked: fileTransfer.open("import"); }
+                    ActionLink { text: "Calendar"; enabled: root.ready; onClicked: root.showCalendar(); }
                     ActionLink { text: "Settings"; onClicked: featurePanel.show("settings"); }
                     Label { Layout.fillWidth: true; visible: !!appSettings.error; text: appSettings.error; wrapMode: Text.WordWrap; }
                     ActionLink {
@@ -945,6 +963,8 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true; }
+                ActionLink { text: "AI"; enabled: root.ready && root.nodes.length > 0 && !features.busy; onClicked: featurePanel.show("ai"); }
+                ActionLink { text: "Export"; enabled: root.ready && !features.busy; onClicked: fileTransfer.open("export"); }
                 ActionLink { text: "Rename Roll"; flat: true; visible: !root.isMemopad; enabled: root.ready; onClicked: root.editRoll(false); }
                 ActionLink { text: root.archived ? "Restore" : "Archive"; flat: true; visible: !root.isMemopad; enabled: root.ready; onClicked: root.toggleArchive(); }
                 ActionLink { text: "Delete"; flat: true; visible: root.archived; onClicked: root.requestDelete(); }
@@ -971,7 +991,7 @@ Item {
             }
             Row {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 40
+                Layout.preferredHeight: Math.max(40, zoomTitle.contentHeight)
                 spacing: 12
                 ActionLink {
                     text: root.rollIcon
@@ -986,7 +1006,8 @@ Item {
                 TextArea {
                     id: zoomTitle
                     width: parent.width - 52
-                    height: 40
+                    height: Math.max(40, contentHeight)
+                    wrapMode: TextEdit.Wrap
                     readOnly: !root.zoom || !root.ready
                     text: { var revision = root.revision; var i = Model.indexOf(root.nodes, root.zoom); return i < 0 ? root.rollName : root.nodes[i].text; }
                     textFormat: TextEdit.PlainText
@@ -997,6 +1018,20 @@ Item {
                     padding: 0
                     background: Item {}
                     property bool sessionRecorded: false
+                    Keys.priority: Keys.BeforeItem
+                    Keys.onPressed: function(event) {
+                        if (readOnly || inputMethodComposing || (event.modifiers & (Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) return;
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                            event.accepted = true;
+                            root.splitItem(root.zoom, selectionStart, selectionEnd);
+                        } else if (selectionStart === selectionEnd) {
+                            var caret = positionToRectangle(cursorPosition);
+                            if ((event.key === Qt.Key_Down && caret.y >= positionToRectangle(length).y - 1) || (event.key === Qt.Key_Right && cursorPosition === length)) {
+                                var target = event.key === Qt.Key_Right ? {position: 0} : {x: caret.x, direction: 1};
+                                if (root.navigateFrom(root.zoom, 1, target)) event.accepted = true;
+                            }
+                        }
+                    }
                     onActiveFocusChanged: {
                         if (activeFocus && root.zoom) root.focusedNode = root.zoom;
                         else sessionRecorded = false;

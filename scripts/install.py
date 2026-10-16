@@ -11,7 +11,8 @@ import tempfile
 
 SOURCE = Path(__file__).resolve().parent.parent
 FILES = [
-    'ActionLink.qml', 'BarWidget.qml', 'Keybindings.js', 'KeyboardSettings.qml',
+    'AiSettings.js', 'ai_backend.py',
+    'FileTransfer.qml', 'interchange.py', 'CompactDialog.qml', 'ActionLink.qml', 'BarWidget.qml', 'Keybindings.js', 'KeyboardSettings.qml',
     'FlolinrIcon.qml', 'flolinr.svg', 'AppSettings.qml', 'QuickCapture.qml', 'FeaturePanel.qml', 'FeatureController.qml', 'bridge.py',
     'Model.js', 'OutlineNode.qml', 'ShortcutsDialog.qml', 'WorkspaceStore.qml',
     'LICENSE', 'README.md', 'keybindings.example.json',

@@ -6,11 +6,14 @@ import qs.Commons as Commons
 Item {
     id: root
     property color color: Commons.Color.foreground
+    property real contentScale: 0.75
     implicitWidth: 24
     implicitHeight: 24
     Shape {
+        x: root.width * (1 - root.contentScale) / 2
+        y: root.height * (1 - root.contentScale) / 2
         width: 24; height: 24
-        transform: Scale { xScale: root.width / 24; yScale: root.height / 24 }
+        transform: Scale { xScale: root.width / 24 * root.contentScale; yScale: root.height / 24 * root.contentScale }
         ShapePath {
             strokeColor: root.color
             strokeWidth: 2

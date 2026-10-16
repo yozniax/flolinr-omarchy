@@ -139,3 +139,172 @@ and `hyprctl configerrors` fail with a socket timeout error. `luac -p` validates
 Lua syntax, but actual key routing and floating-window behavior still need a live
 session check. Likewise, the real LLM CLI could not start through mise's network
 version lookup; fake-CLI integration tests cover the adapter without sending notes.
+
+## 0.10.1 — presentation only
+
+`CompactDialog.qml` supplies shared 11px/light body fonts, a 13px header, and
+quiet theme-aware borders/text for every feature dialog. FeaturePanel sizes
+settings/Markdown to their content; AI retains a bounded preview area. The
+calendar is capped at 400×460 and its activity list at 72px, with scrolling for
+smaller available heights. Sidebar calendar-tree state has been removed; both
+calendar key actions open the modal. Today's note stays above the Rolls area.
+`FlolinrIcon.contentScale` defaults to 0.75 without changing layout dimensions
+or the original SVG. No user data/schema/settings migration is involved.
+
+## 0.11.0 — file-based outline interchange
+
+`FileTransfer.qml` wraps QtQuick.Dialogs.FileDialog, attached to the editor's
+actual Qt window through Window.window. Import uses OpenFile; Export uses
+SaveFile with Markdown/OPML/Plaintext filters and matching default suffixes.
+Qt handles overwrite confirmation. `FeatureController.transfer` starts the
+helper only after file selection is accepted. Cancelling never starts I/O.
+FeaturePanel now handles only settings and AI; no import/export path field remains.
+
+`interchange.py` implements OPML 2.0 text/hierarchy and indentation-based plaintext;
+Markdown stays in Model.js. Imports become fresh validated nodes and a new Roll.
+OPML rejects DTD/entity declarations, excessive depth/item counts and XML-invalid
+characters. File URLs are decoded as local paths, including Unicode and spaces.
+Exports publish complete files by atomic replacement only after the SaveFile
+confirmation; new-location copies remain exclusive and never overwrite.
+
+The standalone file chooser has a QtTest smoke test that works without the
+Quickshell core plugin. It verifies actual parent window attachment, opening,
+OpenFile/SaveFile modes, format filters and suffix updates using Qt's fallback
+dialog in an offscreen window. Native GTK/portal appearance is still a live-session
+check. Reference: https://doc.qt.io/qt-6/qml-qtquick-dialogs-filedialog.html
+OPML format: https://opml.org/spec2.opml
+
+## 0.11.1 — native chooser crash workaround
+
+Import was clicked at 12:46 and 12:47 on 2026-10-16. Cores 88374 and 92445
+show SIGABRT, with GLib `g_malloc`/GVariant construction, GIO D-Bus calls, and
+(in the first stack) GTK and GVFS directory-monitor creation. The journal reports
+`failed to allocate 4 bytes`; available RAM was approximately 7 GiB when examined.
+This identifies the failing native chooser path, not a proven root cause of the
+allocation failure. No core was extracted and no global GTK settings were changed.
+
+`FileTransfer.qml` now sets FileDialog.DontUseNativeDialog for both modes. This
+avoids the GTK chooser while retaining Qt's format selection and overwrite
+confirmation. Regression checks assert the option explicitly and repeatedly
+open/reject Import/Export. Earlier offscreen tests only exercised Qt's fallback,
+so they did not cover the actual GTK path. The workaround forces the tested path
+regardless of the host's platform theme. The sidebar Import link is separate from
+the editor's Export link. Live compositor operation still needs confirmation.
+
+## 0.11.2 — Workflowy import compatibility
+
+The user's selected Workflowy export failed XML parsing because a text attribute
+contained one literal U+0008. A read-only run of the complete bridge → imported
+node → validated workspace path now accepts all 1,616 items (maximum depth 10).
+No private source document or imported content is included in the repository.
+
+The OPML decoder removes only XML-invalid literal characters and invalid numeric
+character references, preserving legal tabs/newlines and ordinary text. It returns
+warnings so the editor shows a completion notice. DTD/entity rejection runs AFTER
+normalization to prevent obfuscated declarations from bypassing the check.
+The original import file is never rewritten. Other import failures now appear in
+a modal instead of only the transient status label. A palette binding loop seen
+in the journal was also removed by assigning buttonText its color directly.
+
+## 0.12.0 — AI connection adapters
+
+`AiSettings.js` validates and migrates non-secret profiles (`aiConnections`,
+`activeAiConnectionId`). New installations are deliberately unconfigured; old
+explicit `aiCommand` arrays migrate to a custom profile. `AppSettings.qml` applies
+saved AI profiles on FileView.onSaved without redirecting the active workspace.
+`FeaturePanel.qml` owns unsaved profile edits and clears password input on switch
+and close. A test cannot become a branch preview. Failed generations invalidate
+application snapshots. No login or model request is performed automatically.
+CLI auth status checks run locally when a profile is selected.
+
+`ai_backend.py` owns presets, auth status, terminal login, generation and Secret
+Service access. Keys travel to the helper and secret-tool over stdin, never argv,
+and never return to QML. Keyring records are scoped to connection ID, provider
+and endpoint fingerprint; changing a compatible URL cannot forward the old key.
+No keyring fallback file exists. Provider error bodies / raw CLI stderr are not
+shown because they can echo private text or credentials. HTTP redirects are
+rejected, remote HTTP is refused, and API response size is bounded. Test requests
+contain a fixed sentence rather than any editor data. OpenAI uses Responses with
+store=false; Anthropic Messages and Ollama native /api/chat have separate adapters.
+Compatible endpoints use /chat/completions. Plain model IDs are user-entered so
+there is no background model-list network request.
+
+References: official OpenAI documentation at
+https://developers.openai.com/codex/auth and
+https://developers.openai.com/api/docs/guides/text ;
+https://docs.ollama.com/api/chat ; installed CLI --help for version-specific flags.
+Codex preset ignores user config, disables shell/web tools and uses a read-only
+sandbox in a fresh temporary directory. Claude preset disables tools, MCP,
+settings sources and slash commands. Custom CLI behavior is user-controlled.
+
+Repeatable tests cover profile migration / secret stripping, UI provider selection
+and password clearing, fixed test input, CLI argument contracts / auth status,
+keyring stdin handling, missing-keyring failures, response parsing, HTTP auth
+errors and redirect refusal against a local mock server. The QML fixture supplies
+only theme singletons, allowing the real settings panel to run without Quickshell.
+
+Live checks on this terminal: Codex reported ChatGPT authentication and the actual
+preset returned the exact fixed connection-test outline. Secret Service stored,
+read and removed a dummy value successfully. No notes were sent. Other real
+providers need the user's own credentials / local model and were covered by mocks.
+
+## 0.12.1 — outline cursor editing
+
+OutlineNode intercepts unmodified arrow keys only at visual/text boundaries; Qt
+continues to handle intra-item movement, wrapping and Shift selection. Navigation
+uses visible rows (respecting collapse/zoom) and carries the caret's horizontal
+position to the first/last visual line of the destination. Deferred delegate focus
+accepts an explicit cursor target; Enter focuses position zero instead of the end.
+The zoom title participates in navigation and splitting; splitting the zoom root
+opens its parent view to expose the new sibling.
+
+Model.splitNode preserves the original ID and descendants and inserts a sibling
+after its branch. Selected text is removed before splitting; the suffix retains
+newlines and inherits color. Splitting is a single structural undo snapshot. The
+existing inputMethodComposing guard bypasses editing key handlers during IME
+composition. Automated Qt tests exercise the actual TextArea's Enter, selection,
+Shift+Enter, wrapping, arrow boundaries and modifier behavior; actual Japanese IME
+candidate confirmation remains a manual desktop check.
+
+## 0.12.2 — Backspace merge
+
+Unmodified Backspace at an unselected cursor position zero joins the preceding
+visible item (or zoom title for its first child). Model.mergeNode keeps destination
+identity/metadata, concatenates text without inserting whitespace and reparents
+the removed node's descendants under the destination. Collapsed predecessors are
+expanded; hidden text is never selected as a merge destination. Structural merge
+uses the existing undo snapshot, and deferred focus restores the caret to the seam.
+Model tests cover sibling/parent/deeper destinations and child preservation; actual
+Qt key tests cover boundary merge, ordinary deletion and selection deletion.
+
+## 0.12.3 — categorized shortcut help
+
+Keybindings.helpSections uses action IDs to group the existing catalog; it never
+matches descriptions by default key. Every configurable action occurs exactly once.
+The dialog adds section headings, separators and a responsive key/description grid,
+with vertical scrolling and no horizontal overflow. Node tests cover remaps and
+complete action coverage; Qt tests exercise rendering, scrolling and live bindings.
+Backspace's reported no-op was followed by the user's confirmation that it works;
+no speculative Backspace / IME behavior change was applied.
+
+## 0.12.4 — Enter inserts on the next visible row
+
+Model.splitNode inserts before existing expanded children as the first child, so
+existing parentage and ordering do not change. Leaf nodes create a sibling; folded
+branches create a visible sibling after their hidden subtree. The zoom root is
+considered expanded irrespective of its saved collapsed flag. Text splitting,
+selection handling, color inheritance and position-zero focus remain intact.
+Model tests cover expanded/folded branches, nested leaves, zoom roots, and merging
+the new item back with Backspace.
+
+## 0.13.0 — AI scope follows the right body
+
+The right header owns the AI link, enabled independently of focusedNode. Generation
+captures activeRollId plus zoom, and snapshots the entire Roll or zoom-root subtree,
+including collapsed descendants. scopeSnapshot/applyScope support multi-root Roll
+previews while reusing applyBranch's single-root / identity preservation for zoom.
+Roll metadata and outside subtrees stay unchanged. Apply checks current Roll, zoom
+and snapshot before the existing undo transaction. The backend prompt uses the
+matching root-count contract, and the dialog explicitly identifies this scope.
+Tests cover full-Roll forest output, hidden descendants, zoom boundaries, stale
+snapshots and the visible scope labels. Fixed connection tests remain note-free.

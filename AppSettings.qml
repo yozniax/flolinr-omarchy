@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "AiSettings.js" as AI
 
 Item {
     id: root
@@ -8,20 +9,23 @@ Item {
     readonly property string path: (Quickshell.env("XDG_CONFIG_HOME") || home + "/.config") + "/flolinr/settings.json"
     property bool ready: false
     property string dataPath: home + "/.local/share/flolinr/outline.json"
-    property var aiCommand: ["claude", "-p", "--tools", "", "--strict-mcp-config", "--no-session-persistence"]
+    property var aiConnections: []
+    property string activeAiConnectionId: ""
+    property var pending: null
     property string error: ""
     signal saved()
     function validate(value) {
         if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected settings object");
         var path = value.dataPath || root.dataPath;
         if (typeof path !== "string" || !(path.startsWith("/") || path.startsWith("~/")) || !path.endsWith(".json")) throw new Error("Choose an absolute .json file path");
-        var command = value.aiCommand || root.aiCommand;
-        if (!Array.isArray(command) || !command.length || !command.every(function(v) { return typeof v === "string"; })) throw new Error("AI command must be a JSON array");
-        return {dataPath: path.replace(/^~\//, root.home + "/"), aiCommand: command};
+        var ai = AI.migrate(value);
+        return {dataPath: path.replace(/^~\//, root.home + "/"), aiConnections: ai.aiConnections, activeAiConnectionId: ai.activeAiConnectionId};
     }
-    function save(path, command) {
-        try { file.setText(JSON.stringify(validate({dataPath: path, aiCommand: JSON.parse(command)}), null, 2)); root.error = ""; }
-        catch (e) { root.error = e.message; }
+    function save(path, connections, activeId) {
+        try {
+            pending = validate({dataPath: path, aiConnections: connections, activeAiConnectionId: activeId});
+            file.setText(JSON.stringify(pending, null, 2)); root.error = "";
+        } catch (e) { root.error = e.message; }
     }
     Process {
         command: ["mkdir", "-p", root.path.slice(0, root.path.lastIndexOf("/"))]
@@ -38,14 +42,21 @@ Item {
             if (root.ready) return;
             try {
                 var value = root.validate(JSON.parse(text()));
-                root.dataPath = value.dataPath; root.aiCommand = value.aiCommand; root.ready = true;
+                root.dataPath = value.dataPath; root.aiConnections = value.aiConnections; root.activeAiConnectionId = value.activeAiConnectionId; root.ready = true;
             } catch (e) { root.error = e.message; }
         }
         onLoadFailed: function(error) {
             if (error === FileViewError.FileNotFound) root.ready = true;
             else root.error = "Could not read settings: " + error;
         }
-        onSaved: root.saved()
+        onSaved: {
+            if (root.pending) {
+                root.aiConnections = root.pending.aiConnections;
+                root.activeAiConnectionId = root.pending.activeAiConnectionId;
+                root.pending = null;
+            }
+            root.saved();
+        }
         onSaveFailed: function(error) { root.error = "Could not save settings: " + error; }
     }
 }
