@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
+import QtQuick.Dialogs as Dialogs
 import "AiSettings.js" as AI
 import qs.Commons as Commons
 
@@ -26,8 +28,8 @@ CompactDialog {
     focus: true
     title: mode === "ai" ? "AI · current view" : "Settings · AI connections"
     standardButtons: Dialog.NoButton
-    closePolicy: controller.busy ? Popup.NoAutoClose : Popup.CloseOnEscape
-    onClosed: { key.clear(); controller.aiBefore = ""; }
+    closePolicy: controller.busy || workspacePicker.visible ? Popup.NoAutoClose : Popup.CloseOnEscape
+    onClosed: { workspacePicker.close(); key.clear(); controller.aiBefore = ""; }
     function show(mode) {
         if (controller.busy) return;
         root.mode = mode === "ai" && !controller.activeConnection ? "settings" : mode;
@@ -39,6 +41,35 @@ CompactDialog {
         drafts = JSON.parse(JSON.stringify(controller.aiConnections));
         choose(controller.activeAiConnectionId || (drafts.length ? drafts[0].id : ""));
         open();
+    }
+    function localFileUrl(value) {
+        return "file://" + value.split("/").map(function(part) { return encodeURIComponent(part); }).join("/");
+    }
+    function browseWorkspace() {
+        if (controller.busy) return;
+        var value = path.text;
+        if (value.startsWith("~/")) value = String(controller.homePath) + value.slice(1);
+        if (!String(value).startsWith("/")) value = controller.dataPath;
+        workspacePicker.currentFolder = localFileUrl(value.slice(0, value.lastIndexOf("/")) || "/");
+        workspacePicker.selectedFile = localFileUrl(value);
+        workspacePicker.open();
+    }
+    Dialogs.FileDialog {
+        id: workspacePicker
+        objectName: "workspaceFilePicker"
+        parentWindow: root.parent ? root.parent.Window.window : null
+        title: "Choose workspace file (existing or new)"
+        fileMode: Dialogs.FileDialog.SaveFile
+        // Selection only edits the draft path. Settings preserves existing files.
+        options: Dialogs.FileDialog.DontUseNativeDialog | Dialogs.FileDialog.DontConfirmOverwrite
+        nameFilters: ["Flolinr workspace (*.json)"]
+        defaultSuffix: "json"
+        onAccepted: {
+            var match = /^file:\/\/(?:localhost)?(\/.*)$/.exec(selectedFile.toString());
+            if (!match) { message.text = "Choose a local workspace file"; return; }
+            try { path.text = decodeURIComponent(match[1]); message.text = "Path selected. Save settings to apply."; }
+            catch (e) { message.text = "Could not read the selected path"; }
+        }
     }
     function choose(id) {
         selectedId = id; key.clear(); status.text = ""; loadFields();
@@ -82,7 +113,16 @@ CompactDialog {
                 spacing: 8
                 enabled: !root.controller.busy
                 Label { text: "Workspace file (.json)"; }
-                TextField { id: path; Layout.fillWidth: true; placeholderText: "/home/you/notes/outline.json"; }
+                RowLayout {
+                    Layout.fillWidth: true
+                    TextField { id: path; objectName: "workspacePath"; Layout.fillWidth: true; placeholderText: "/home/you/notes/outline.json"; }
+                    ActionLink { text: "Browse…"; objectName: "browseWorkspace"; onClicked: root.browseWorkspace(); }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: "Choose an existing workspace or name a new .json file. Selection does not write a file. Save settings to apply; changing the workspace requires a shell reload."
+                }
                 Label { text: "AI connection · selected connection becomes active when saved"; Layout.fillWidth: true; wrapMode: Text.WordWrap; }
                 ComboBox {
                     id: connectionPicker

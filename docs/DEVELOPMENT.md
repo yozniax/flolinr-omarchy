@@ -308,3 +308,14 @@ and snapshot before the existing undo transaction. The backend prompt uses the
 matching root-count contract, and the dialog explicitly identifies this scope.
 Tests cover full-Roll forest output, hidden descendants, zoom boundaries, stale
 snapshots and the visible scope labels. Fixed connection tests remain note-free.
+
+## 0.13.1 — workspace path chooser
+
+FeaturePanel's Browse link uses the same forced Qt Quick FileDialog backend as
+import/export. SaveFile mode supports existing and new JSON paths; confirmation
+of overwrite is disabled because accepting only updates the draft TextField.
+The existing location/save path remains the sole writer and preserves existing
+workspaces. File URLs are encoded per path segment and decoded on acceptance to
+preserve Unicode, spaces, hashes and percent signs. Cancellation leaves the draft
+unchanged; closing settings also closes the chooser. The picker attaches to the
+popup parent's actual window. Qt tests cover these paths and native-backend flags.

@@ -7,6 +7,7 @@ Item {
     id: root
     required property var editor
     required property var settings
+    readonly property string homePath: settings.home
     readonly property string dataPath: settings.dataPath
     readonly property var aiConnections: settings.aiConnections
     readonly property string activeAiConnectionId: settings.activeAiConnectionId
