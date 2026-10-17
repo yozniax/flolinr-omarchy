@@ -1,6 +1,9 @@
 // Danish, German, Russian and Polish catalogs, keyed by stable English source.
 var catalog = {
   "da": {
+    "Copy Markdown": "Kopiér Markdown",
+    "Markdown copied": "Markdown kopieret",
+
     "Language": "Sprog",
     "Settings · AI connections": "Indstillinger",
     "Settings": "Indstillinger",
@@ -288,6 +291,9 @@ var catalog = {
     "Use two spaces per indentation level": "Brug to mellemrum pr. niveau"
   },
   "de": {
+    "Copy Markdown": "Markdown kopieren",
+    "Markdown copied": "Markdown kopiert",
+
     "Language": "Sprache",
     "Settings · AI connections": "Einstellungen",
     "Settings": "Einstellungen",
@@ -575,6 +581,9 @@ var catalog = {
     "Use two spaces per indentation level": "Zwei Leerzeichen pro Ebene verwenden"
   },
   "ru": {
+    "Copy Markdown": "Копировать Markdown",
+    "Markdown copied": "Markdown скопирован",
+
     "Language": "Язык",
     "Settings · AI connections": "Настройки",
     "Settings": "Настройки",
@@ -862,6 +871,9 @@ var catalog = {
     "Use two spaces per indentation level": "Используйте два пробела на уровень"
   },
   "pl": {
+    "Copy Markdown": "Kopiuj Markdown",
+    "Markdown copied": "Skopiowano Markdown",
+
     "Language": "Język",
     "Settings · AI connections": "Ustawienia",
     "Settings": "Ustawienia",

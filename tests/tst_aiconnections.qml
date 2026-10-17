@@ -131,6 +131,16 @@ TestCase {
         controller.aiPreviewReady = true;
         verify(action.enabled);
         var text = preview.text;
+        var copyAction = findChild(panel, "aiCopyMarkdown");
+        verify(copyAction.visible && copyAction.enabled);
+        preview.select(2, 7);
+        panel.copyMarkdown();
+        var clipboardProbe = createTemporaryQmlObject('import QtQuick; TextEdit {}', tests);
+        clipboardProbe.paste();
+        compare(clipboardProbe.text, text);
+        compare(preview.selectionStart, 2); compare(preview.selectionEnd, 7);
+        compare(preview.text, text);
+        compare(findChild(panel, "aiMessage").text, "Markdown copied");
         var picker = findChild(panel, "aiMarkdownPicker");
         panel.downloadMarkdown();
         compare(picker.parentWindow, tests.Window.window);
