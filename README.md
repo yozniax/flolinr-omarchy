@@ -1,11 +1,12 @@
-# Flolinr
+# Flolinr for Omarchy
 
-A quiet outliner for Omarchy—for ideas, daily notes, and whatever comes next.
+A quiet outliner for Omarchy — for ideas, daily notes, and whatever comes next.
 
 <img width="1070" height="481" alt="screenshot-2026-10-17_13-46-12" src="https://github.com/user-attachments/assets/d8121b28-71ae-4061-9b93-6e3855bb8d03" />
-<img width="2160" height="1310" alt="screenshot-2026-10-17_13-42-10" src="https://github.com/user-attachments/assets/0e824bad-4bf8-4528-afcc-18fc803af6fa" />
 
 A keyboard-first outliner for Omarchy. Organize ideas into nested items, zoom into a branch, keep a dated daily memo, and search across your workspace.
+
+<img width="2160" height="1310" alt="screenshot-2026-10-17_13-42-10" src="https://github.com/user-attachments/assets/0e824bad-4bf8-4528-afcc-18fc803af6fa" />
 
 ## Install
 
