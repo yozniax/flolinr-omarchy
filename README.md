@@ -325,3 +325,56 @@ SettingsのWorkspace file欄にBrowse…を追加しました。
 選択した時点ではPath欄の変更だけで、ファイルの作成・上書きは行いません。
 Save settingsで保存します。既存ファイルは上書きせず、新しい場所には現在の内容をコピーします。
 保存先を切り替えるにはシェル再読み込みが必要です。Pathの直接入力も引き続き使えます。
+
+## 0.13.2 — ボディのスクロール
+
+マウスホイール1ノッチの移動量を96pxにし、前後1画面分の行を先読みします。
+ピクセル単位の入力とタッチパッドは標準処理を維持します。
+1,600項目・複数行を含むQtテストで、ホイール操作、上下端、遅延生成を確認します。
+
+```sh
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_QUICK_CONTROLS_STYLE=Basic \
+  /usr/lib/qt6/bin/qmltestrunner -import tests/fixtures -input tests/tst_outlinescroll.qml
+```
+
+## 0.14.0 — AIでリッチなMarkdownへ変換
+
+AIの対象は、Zoomなしでは現在のRoll全体、Zoom中はその見出しと配下の枝だけです。
+折りたたんだ子項目も含み、Zoom外の枝は送りません。対象はAI画面のScopeで確認できます。
+
+AI → **Convert to Markdown**で、意味に応じた段落・見出し・表・引用・コードブロック・
+タスクリスト・リンク・脚注などを使うMarkdown文書を生成します。
+すべての記法を無理に使うのではなく、内容に合う表現をAIが選びます。
+プレビューを編集して **Save Markdown…** を押すと、ファイル選択画面で保存できます。
+このモードではApply previewを表示せず、元のOutlineは変更しません。
+
+AI操作を切り替えると以前のプレビューを破棄し、失敗した生成結果は適用・保存できません。
+保存キャンセル後や保存完了後もプレビューを保持します。
+
+## 0.15.0 — 表示言語と英語表記の整理
+
+**Settings → Language**で言語を選び、**Save settings**で保存します。
+English（既定）／日本語／简体中文／繁體中文／한국어／Español／Português／Français／Italiano
+の9言語に対応します。保存後すぐに反映し、次回起動時も選択を維持します。
+既存の設定ファイルに言語の指定がない場合はEnglishを使用します。
+
+サイドバー・設定・AI・検索・カレンダー・入出力・クイックメモ・ショートカットの
+ラベルと案内を翻訳し、日時と曜日も選択言語に合わせます。
+本文、Roll名、AIへの入力・出力は翻訳せず保持します。
+外部ツール由来の未知の診断文は原文を表示します。
+英語ではNodeをItemに統一し、Connection testをTest connection、
+Download .mdをデスクトップの操作に合わせてSave Markdown…に改めました。
+
+```sh
+node tests/translations.test.cjs
+python tests/test_language_settings.py
+```
+
+## 0.15.1 — Expandへの追加指示
+
+AI → Expandで追加指示欄を開き、Generate expansionで実行します。
+例：「具体例を3つ加える」「手順ごとに小さなタスクに分ける」などを指定できます。
+指示は任意・最大10,000文字で、Expandにだけ使用します。空欄なら従来どおり展開します。
+入力はダイアログ内で保持し、閉じると消去します。
+英語の日付メモ表示は、ご指定のToday's Memorandomに統一しました。
+既存メモの内容や保存形式は変更しません。

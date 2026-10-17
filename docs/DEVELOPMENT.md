@@ -319,3 +319,52 @@ workspaces. File URLs are encoded per path segment and decoded on acceptance to
 preserve Unicode, spaces, hashes and percent signs. Cancellation leaves the draft
 unchanged; closing settings also closes the chooser. The picker attaches to the
 popup parent's actual window. Qt tests cover these paths and native-backend flags.
+
+### Rich Markdown AI conversion (0.14.0)
+
+`markdown` uses the same `scopeSnapshot` selection as other AI tasks: the entire
+Roll or the zoom root and its descendants, including collapsed nodes. The backend
+uses a document prompt rather than the bullet-outline replacement contract. Output
+is kept as text, never passed through `importMarkdown` / `applyScope`.
+`aiTask` and `aiPreviewReady` prevent applying document output as outline nodes or
+saving a stale preview after failed generation. The dedicated Qt Quick SaveFile
+chooser confirms overwrites and exports through the existing atomic bridge with
+workspace protection. Export success has a separate signal so it cannot replace
+the preview with a status message. No live AI service is used by these tests.
+
+Tests: `tests/test_ai_backend.py`, `tests/test_bridge.py`, `tests/features.test.cjs`,
+and QtTest `tests/tst_aiconnections.qml` with `-import tests/fixtures`.
+
+### UI languages (0.15.0)
+
+`I18n.qml` is a local QML singleton declared in `qmldir`; `Translations.js` owns
+the nine supported locale codes, native language names, English wording overrides,
+and eight complete translation columns. UI bindings call `I18n.t` and depend on
+the singleton language property, so they refresh without rebuilding the editor.
+Use numbered placeholders to preserve user values, paths, and localized word order.
+Do not pass user-authored Roll names or note text through the translation catalog.
+Provider diagnostics not in the catalog retain their original text. Qt-owned
+file-picker chrome uses the shell's Qt translations, while our picker titles and
+format labels follow the Flolinr language setting.
+
+`language` defaults to `en`, with unsupported codes falling back to English.
+AppSettings includes it in validation and atomic writes and applies it only after
+a successful save. It remains separate from the outline workspace. Existing AI
+profiles and paths survive save/reload. Language selection is a settings draft
+until saved; canceling leaves the current language unchanged.
+
+`tests/translations.test.cjs` checks all catalog columns, placeholders, literal UI
+translation calls, shortcut descriptions and fallback behavior. Qt tests exercise
+all language choices and narrow-window AI layouts. `tests/test_language_settings.py`
+uses real Quickshell FileView writes in a temporary XDG directory and restarts a
+fresh process for each locale. It never loads or writes the user's workspace.
+
+### Expansion guidance (0.15.1)
+
+Expand now opens an optional instruction editor instead of immediately sending
+a request. The panel passes its draft through FeatureController as `instructions`;
+the backend validates the type and a 10,000-character limit and adds it only to
+expansion prompts, ahead of a separately labeled source outline. Existing scope
+and bullet-output constraints are retained. Other tasks ignore the field. Closing
+the panel clears it; opening expansion invalidates any previous preview. Tests
+cover UI submission, empty input, cross-task isolation and backend validation.

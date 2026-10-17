@@ -237,7 +237,7 @@ function searchWorkspace(rolls, query) {
         roll.nodes.forEach(function(n) {
             ancestors.length = n.depth;
             if (n.text.toLocaleLowerCase().indexOf(needle) >= 0)
-                hits.push({rollId: roll.id, nodeId: n.id, text: n.text, rollName: roll.memopadDate ? "Daily note · " + roll.memopadDate : roll.name,
+                hits.push({rollId: roll.id, nodeId: n.id, text: n.text, rollName: roll.memopadDate ? "Today's Memorandom · " + roll.memopadDate : roll.name,
                     path: ancestors.join(" / "), memopadDate: roll.memopadDate || "", archived: !!roll.archived});
             ancestors[n.depth] = n.text;
         });
