@@ -75,11 +75,20 @@ Item {
                 Layout.fillWidth: true
                 spacing: 6
                 FlolinrIcon { Layout.preferredWidth: 18; Layout.preferredHeight: 18; }
-                Label {
-                    text: "Flolinr"
-                    color: Commons.Color.foreground
-                    font.pixelSize: 13
-                    font.bold: true
+                RowLayout {
+                    spacing: 0
+                    Label {
+                        text: "Flolin"
+                        color: Commons.Color.foreground
+                        font.pixelSize: 13
+                        font.bold: true
+                    }
+                    Label {
+                        text: "r"
+                        color: Commons.Color.accent
+                        font.pixelSize: 13
+                        font.bold: true
+                    }
                 }
                 Item { Layout.fillWidth: true; }
                 ActionLink {
