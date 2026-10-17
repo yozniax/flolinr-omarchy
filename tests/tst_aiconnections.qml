@@ -79,7 +79,7 @@ TestCase {
         panel.show("settings");
         var picker = findChild(panel, "languagePicker");
         var action = findChild(panel, "aiPreviewAction");
-        compare(picker.currentIndex, 0); compare(picker.count, 9);
+        compare(picker.currentIndex, 0); compare(picker.count, 13);
         picker.currentIndex = 1;
         compare(App.I18n.language, "en");
         panel.close(); panel.show("settings"); compare(picker.currentIndex, 0);
@@ -87,7 +87,7 @@ TestCase {
             picker.currentIndex = i;
             action.clicked();
             compare(controller.language, App.I18n.languages[i].code);
-            compare(panel.title, App.I18n.t("Settings · AI connections"));
+            compare(panel.title, "⚙️ " + App.I18n.t("Settings · AI connections"));
             compare(action.text, App.I18n.t("Save settings"));
             panel.close(); panel.show("settings"); compare(picker.currentIndex, i);
         }
@@ -114,7 +114,7 @@ TestCase {
         controller.activeConnection = {name: "Test Codex", provider: "codex", model: ""};
         controller.scopeLabel = "My Roll · entire Roll";
         panel.show("ai");
-        compare(panel.mode, "ai"); compare(panel.title, "AI · current view");
+        compare(panel.mode, "ai"); compare(panel.title, "✨ AI · current view");
         compare(panel.scopeLabel, "My Roll · entire Roll");
         panel.close(); controller.scopeLabel = "Zoom heading · entire zoomed branch";
         panel.show("ai"); compare(panel.scopeLabel, "Zoom heading · entire zoomed branch");

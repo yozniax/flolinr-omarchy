@@ -1,17 +1,24 @@
 .pragma library
+.import "EuropeanTranslations.js" as European
 // English source strings are stable keys. Never translate user-authored content.
+// English first; the remaining entries follow English language names alphabetically.
 var languages = [
-    {code: "en", name: "English"}, {code: "ja", name: "日本語"},
-    {code: "zh-CN", name: "简体中文"}, {code: "zh-TW", name: "繁體中文"},
-    {code: "ko", name: "한국어"}, {code: "es", name: "Español"},
-    {code: "pt", name: "Português"}, {code: "fr", name: "Français"},
-    {code: "it", name: "Italiano"}
+    {code:"en",name:"English"},
+    {code:"zh-CN",name:"简体中文"}, {code:"zh-TW",name:"繁體中文"},
+    {code:"da",name:"Dansk"}, {code:"fr",name:"Français"},
+    {code:"de",name:"Deutsch"}, {code:"it",name:"Italiano"},
+    {code:"ja",name:"日本語"}, {code:"ko",name:"한국어"},
+    {code:"pl",name:"Polski"}, {code:"pt",name:"Português"},
+    {code:"ru",name:"Русский"}, {code:"es",name:"Español"}
 ];
+// Catalog storage order is independent of the presentation order above.
+var legacyCodes = ["ja","zh-CN","zh-TW","ko","es","pt","fr","it"];
+
 function normalize(code) {
     return languages.some(function(entry) { return entry.code === code; }) ? code : "en";
 }
 function localeName(code) {
-    return {en: "en_US", ja: "ja_JP", "zh-CN": "zh_CN", "zh-TW": "zh_TW", ko: "ko_KR", es: "es_ES", pt: "pt_PT", fr: "fr_FR", it: "it_IT"}[normalize(code)];
+    return {en: "en_US", ja: "ja_JP", "zh-CN": "zh_CN", "zh-TW": "zh_TW", ko: "ko_KR", es: "es_ES", pt: "pt_PT", fr: "fr_FR", it: "it_IT", da: "da_DK", de: "de_DE", ru: "ru_RU", pl: "pl_PL"}[normalize(code)];
 }
 var english = {
   "Settings · AI connections": "Settings",
@@ -23,19 +30,20 @@ var english = {
   "Node color": "Item color",
   "Connection test": "Test connection",
   "Download .md": "Save Markdown…",
-  "Open today’s fixed memopad and start typing": "Open Today's Memorandom and start typing",
+  "Open today’s fixed memopad and start typing": "Open Today's Memo and start typing",
   "Choose a node color": "Choose an item color",
   "Return to a parent or Home": "Return to a parent or the Roll root",
   "Export current Roll": "Export the current Roll",
   "Save stores the key in this device’s desktop keyring, separate from notes and settings. Test uses a typed key without saving it.": "Saving stores the key in this device’s keyring, separate from notes and settings. Testing uses the entered key without saving it.",
-  "Today's note": "Today's Memorandom",
-  "Daily note": "Today's Memorandom",
-  "DAILY NOTE": "Today's Memorandom",
-  "Add today's note": "Add to Today's Memorandom",
-  "Today’s note · Enter to save · Esc to cancel": "Today's Memorandom · Enter to save · Esc to cancel",
+  "Today's note": "Today's Memo",
+  "Daily note": "Today's Memo",
+  "DAILY NOTE": "Today's Memo",
+  "Add today's note": "Add to Today's Memo",
+  "Today’s note · Enter to save · Esc to cancel": "Today's Memo · Enter to save · Esc to cancel",
   "Daily notes & calendar": "Notes & calendar",
   "Search all Rolls and daily notes": "Search all Rolls and notes",
-  "Customize shortcuts: {0}\nEnter, Tab, Backspace and dialog navigation use fixed editing keys.\n\nSearch spans all Rolls and daily notes. Select a result to zoom into the matching item.": "Customize shortcuts: {0}\nEnter, Tab, Backspace and dialog navigation use fixed editing keys.\n\nSearch spans all Rolls and notes. Select a result to zoom into the matching item."
+  "Customize shortcuts: {0}\nEnter, Tab, Backspace and dialog navigation use fixed editing keys.\n\nSearch spans all Rolls and daily notes. Select a result to zoom into the matching item.": "Customize shortcuts: {0}\nEnter, Tab, Backspace and dialog navigation use fixed editing keys.\n\nSearch spans all Rolls and notes. Select a result to zoom into the matching item.",
+  "Insert a copy under the selected item. Embedded content is never sent to AI.": "The slash-command item becomes the inserted block. Embedded content is never sent to AI."
 };
 // Each row: Japanese, Simplified Chinese, Traditional Chinese, Korean,
 // Spanish, Portuguese, French, Italian. All entries must have eight translations.
@@ -2289,14 +2297,405 @@ var catalog = {
     "As instruções não podem exceder 10.000 caracteres",
     "Les instructions ne doivent pas dépasser 10 000 caractères",
     "Le istruzioni non possono superare i 10.000 caratteri"
+  ],
+  "Insert…": [
+    "挿入…",
+    "插入…",
+    "插入…",
+    "삽입…",
+    "Insertar…",
+    "Inserir…",
+    "Insérer…",
+    "Inserisci…"
+  ],
+  "Insert file or code": [
+    "ファイル・コードを挿入",
+    "插入文件或代码",
+    "插入檔案或程式碼",
+    "파일 또는 코드 삽입",
+    "Insertar archivo o código",
+    "Inserir ficheiro ou código",
+    "Insérer un fichier ou du code",
+    "Inserisci file o codice"
+  ],
+  "Insert file": [
+    "ファイルを挿入",
+    "插入文件",
+    "插入檔案",
+    "파일 삽입",
+    "Insertar archivo",
+    "Inserir ficheiro",
+    "Insérer un fichier",
+    "Inserisci file"
+  ],
+  "Choose file…": [
+    "ファイルを選択…",
+    "选择文件…",
+    "選擇檔案…",
+    "파일 선택…",
+    "Elegir archivo…",
+    "Escolher ficheiro…",
+    "Choisir un fichier…",
+    "Scegli file…"
+  ],
+  "All files (*)": [
+    "すべてのファイル (*)",
+    "所有文件 (*)",
+    "所有檔案 (*)",
+    "모든 파일 (*)",
+    "Todos los archivos (*)",
+    "Todos os ficheiros (*)",
+    "Tous les fichiers (*)",
+    "Tutti i file (*)"
+  ],
+  "Filename or title": [
+    "ファイル名または見出し",
+    "文件名或标题",
+    "檔名或標題",
+    "파일 이름 또는 제목",
+    "Nombre de archivo o título",
+    "Nome do ficheiro ou título",
+    "Nom du fichier ou titre",
+    "Nome file o titolo"
+  ],
+  "Language: html, css, json, markdown, text…": [
+    "言語：html、css、json、markdown、text…",
+    "语言：html、css、json、markdown、text…",
+    "語言：html、css、json、markdown、text…",
+    "언어: html, css, json, markdown, text…",
+    "Lenguaje: html, css, json, markdown, text…",
+    "Linguagem: html, css, json, markdown, text…",
+    "Langage : html, css, json, markdown, text…",
+    "Linguaggio: html, css, json, markdown, text…"
+  ],
+  "Paste code or text here": [
+    "コードやテキストを貼り付け",
+    "在此粘贴代码或文本",
+    "在此貼上程式碼或文字",
+    "코드 또는 텍스트 붙여넣기",
+    "Pega código o texto aquí",
+    "Cole código ou texto aqui",
+    "Collez du code ou du texte ici",
+    "Incolla codice o testo qui"
+  ],
+  "Insert code or text": [
+    "コード・テキストを挿入",
+    "插入代码或文本",
+    "插入程式碼或文字",
+    "코드 또는 텍스트 삽입",
+    "Insertar código o texto",
+    "Inserir código ou texto",
+    "Insérer le code ou le texte",
+    "Inserisci codice o testo"
+  ],
+  "Insert a copy under the selected item. Embedded content is never sent to AI.": [
+    "スラッシュコマンドの項目を挿入ブロックに置き換えます。挿入内容はAIに送信しません。",
+    "将斜杠命令条目替换为嵌入块。嵌入内容不会发送给 AI。",
+    "將斜線命令項目替換為嵌入區塊。嵌入內容不會傳送給 AI。",
+    "슬래시 명령 항목을 삽입 블록으로 바꿉니다. 삽입 내용은 AI로 전송되지 않습니다.",
+    "Sustituye el elemento del comando por el bloque. El contenido no se envía a la IA.",
+    "Substitui o item do comando pelo bloco. O conteúdo não é enviado à IA.",
+    "Remplace l'élément de commande par le bloc. Le contenu n'est pas envoyé à l'IA.",
+    "Sostituisce l'elemento del comando con il blocco. Il contenuto non viene inviato all'IA."
+  ],
+  "Protected from AI": [
+    "AIによる編集から保護",
+    "受 AI 编辑保护",
+    "受 AI 編輯保護",
+    "AI 편집으로부터 보호됨",
+    "Protegido frente a la IA",
+    "Protegido contra a IA",
+    "Protégé contre l'IA",
+    "Protetto dall'IA"
+  ],
+  "Edit content": [
+    "内容を編集",
+    "编辑内容",
+    "編輯內容",
+    "내용 편집",
+    "Editar contenido",
+    "Editar conteúdo",
+    "Modifier le contenu",
+    "Modifica contenuto"
+  ],
+  "Save file…": [
+    "ファイルを保存…",
+    "保存文件…",
+    "儲存檔案…",
+    "파일 저장…",
+    "Guardar archivo…",
+    "Guardar ficheiro…",
+    "Enregistrer le fichier…",
+    "Salva file…"
+  ],
+  "Remove content": [
+    "挿入内容を削除",
+    "移除嵌入内容",
+    "移除嵌入內容",
+    "삽입 내용 제거",
+    "Quitar contenido",
+    "Remover conteúdo",
+    "Retirer le contenu",
+    "Rimuovi contenuto"
+  ],
+  "Image preview unavailable": [
+    "画像をプレビューできません",
+    "无法预览图片",
+    "無法預覽圖片",
+    "이미지를 미리 볼 수 없습니다",
+    "Vista previa no disponible",
+    "Pré-visualização indisponível",
+    "Aperçu indisponible",
+    "Anteprima non disponibile"
+  ],
+  "Show content": [
+    "内容を展開",
+    "展开内容",
+    "展開內容",
+    "내용 펼치기",
+    "Mostrar contenido",
+    "Mostrar conteúdo",
+    "Afficher le contenu",
+    "Mostra contenuto"
+  ],
+  "Hide content": [
+    "内容を折りたたむ",
+    "折叠内容",
+    "折疊內容",
+    "내용 접기",
+    "Ocultar contenido",
+    "Ocultar conteúdo",
+    "Masquer le contenu",
+    "Nascondi contenuto"
+  ],
+  "Invalid attachment": [
+    "挿入内容の形式が不正です",
+    "嵌入内容格式无效",
+    "嵌入內容格式無效",
+    "삽입 내용 형식이 잘못되었습니다",
+    "Contenido incrustado no válido",
+    "Conteúdo incorporado inválido",
+    "Contenu intégré invalide",
+    "Contenuto incorporato non valido"
+  ],
+  "The insertion target changed": [
+    "挿入先が変更されました",
+    "插入目标已更改",
+    "插入目標已變更",
+    "삽입 대상이 변경되었습니다",
+    "El destino de inserción ha cambiado",
+    "O destino de inserção mudou",
+    "La destination d'insertion a changé",
+    "La destinazione è cambiata"
+  ],
+  "Inserted files must be 2 MB or smaller": [
+    "挿入ファイルは2MB以内にしてください",
+    "插入文件不能超过 2 MB",
+    "插入檔案不能超過 2 MB",
+    "삽입 파일은 2MB 이하여야 합니다",
+    "El archivo no puede superar 2 MB",
+    "O ficheiro não pode exceder 2 MB",
+    "Le fichier ne doit pas dépasser 2 Mo",
+    "Il file non può superare 2 MB"
+  ],
+  "Text and code files must use UTF-8 encoding": [
+    "テキストとコードはUTF-8形式にしてください",
+    "文本和代码文件必须使用 UTF-8 编码",
+    "文字和程式碼檔案必須使用 UTF-8 編碼",
+    "텍스트 및 코드 파일은 UTF-8이어야 합니다",
+    "Los archivos de texto y código deben usar UTF-8",
+    "Os ficheiros de texto e código devem usar UTF-8",
+    "Les fichiers texte et code doivent utiliser UTF-8",
+    "I file di testo e codice devono usare UTF-8"
+  ],
+  "AI changed a protected attachment marker. Generate a new preview.": [
+    "AIが保護用の目印を変更したため適用できません。生成し直してください。",
+    "AI 更改了保护标记，无法应用。请重新生成预览。",
+    "AI 變更了保護標記，無法套用。請重新產生預覽。",
+    "AI가 보호 표식을 변경했습니다. 미리보기를 다시 생성하세요.",
+    "La IA cambió un marcador protegido. Genera otra vista previa.",
+    "A IA alterou um marcador protegido. Gere nova pré-visualização.",
+    "L'IA a modifié un marqueur protégé. Générez un nouvel aperçu.",
+    "L'IA ha modificato un marcatore protetto. Genera una nuova anteprima."
+  ],
+  "AI changed a protected attachment's indentation. Generate a new preview.": [
+    "AIが挿入項目のインデントを変更したため適用できません。生成し直してください。",
+    "AI 更改了受保护条目的缩进。请重新生成预览。",
+    "AI 變更了受保護項目的縮排。請重新產生預覽。",
+    "AI가 보호된 항목의 들여쓰기를 변경했습니다. 미리보기를 다시 생성하세요.",
+    "La IA cambió la sangría de un elemento protegido. Genera otra vista previa.",
+    "A IA alterou o recuo de um item protegido. Gere nova pré-visualização.",
+    "L'IA a modifié le retrait d'un élément protégé. Générez un nouvel aperçu.",
+    "L'IA ha modificato il rientro di un elemento protetto. Genera una nuova anteprima."
   ]
 };
+// Slash command dialogs and actions.
+Object.assign(catalog, {
+  "Insert date": [
+    "日付を挿入",
+    "插入日期",
+    "插入日期",
+    "날짜 삽입",
+    "Insertar fecha",
+    "Inserir data",
+    "Insérer une date",
+    "Inserisci data"
+  ],
+  "Link to a Roll or item": [
+    "Roll・項目へのリンク",
+    "链接到 Roll 或条目",
+    "連結至 Roll 或項目",
+    "Roll 또는 항목에 연결",
+    "Enlazar a un Roll o elemento",
+    "Ligar a um Roll ou item",
+    "Lien vers un Roll ou un élément",
+    "Collega a un Roll o elemento"
+  ],
+  "Insert template": [
+    "テンプレートを挿入",
+    "插入模板",
+    "插入範本",
+    "템플릿 삽입",
+    "Insertar plantilla",
+    "Inserir modelo",
+    "Insérer un modèle",
+    "Inserisci modello"
+  ],
+  "Insert": [
+    "挿入",
+    "插入",
+    "插入",
+    "삽입",
+    "Insertar",
+    "Inserir",
+    "Insérer",
+    "Inserisci"
+  ],
+  "Search Rolls and items": [
+    "Roll・項目を検索",
+    "搜索 Roll 和条目",
+    "搜尋 Roll 與項目",
+    "Roll 및 항목 검색",
+    "Buscar Rolls y elementos",
+    "Pesquisar Rolls e itens",
+    "Rechercher des Rolls et éléments",
+    "Cerca Roll ed elementi"
+  ],
+  "Task": [
+    "タスク",
+    "任务",
+    "任務",
+    "작업",
+    "Tarea",
+    "Tarefa",
+    "Tâche",
+    "Attività"
+  ],
+  "Could not complete action": [
+    "操作を完了できませんでした",
+    "无法完成操作",
+    "無法完成操作",
+    "작업을 완료할 수 없습니다",
+    "No se pudo completar la acción",
+    "Não foi possível concluir a ação",
+    "Impossible de terminer l’action",
+    "Impossibile completare l’azione"
+  ],
+  "Link unavailable": [
+    "リンク先が見つかりません",
+    "链接不可用",
+    "連結無法使用",
+    "링크를 사용할 수 없습니다",
+    "Enlace no disponible",
+    "Ligação indisponível",
+    "Lien indisponible",
+    "Collegamento non disponibile"
+  ],
+  "The linked item no longer exists": [
+    "リンク先のRollまたは項目が見つかりません",
+    "链接的 Roll 或条目已不存在",
+    "連結的 Roll 或項目已不存在",
+    "연결된 Roll 또는 항목이 더 이상 없습니다",
+    "El Roll o elemento enlazado ya no existe",
+    "O Roll ou item ligado já não existe",
+    "Le Roll ou l’élément lié n’existe plus",
+    "Il Roll o elemento collegato non esiste più"
+  ],
+  "Meeting notes": [
+    "議事録",
+    "会议记录",
+    "會議記錄",
+    "회의록",
+    "Notas de reunión",
+    "Notas de reunião",
+    "Notes de réunion",
+    "Note della riunione"
+  ],
+  "Daily review": [
+    "日次レビュー",
+    "每日回顾",
+    "每日回顧",
+    "일일 회고",
+    "Revisión diaria",
+    "Revisão diária",
+    "Bilan quotidien",
+    "Riepilogo giornaliero"
+  ],
+  "Project plan": [
+    "プロジェクト計画",
+    "项目计划",
+    "專案計畫",
+    "프로젝트 계획",
+    "Plan de proyecto",
+    "Plano de projeto",
+    "Plan de projet",
+    "Piano di progetto"
+  ],
+  "Choose a template": [
+    "テンプレートを選択してください",
+    "请选择模板",
+    "請選擇範本",
+    "템플릿을 선택하세요",
+    "Elige una plantilla",
+    "Escolha um modelo",
+    "Choisissez un modèle",
+    "Scegli un modello"
+  ],
+  "Choose a valid date": [
+    "有効な日付を選択してください",
+    "请选择有效日期",
+    "請選擇有效日期",
+    "유효한 날짜를 선택하세요",
+    "Elige una fecha válida",
+    "Escolha uma data válida",
+    "Choisissez une date valide",
+    "Scegli una data valida"
+  ]
+});
+
+Object.assign(catalog, {"No results": ["結果なし", "无结果", "沒有結果", "결과 없음", "Sin resultados", "Sem resultados", "Aucun résultat", "Nessun risultato"]});
+
+Object.assign(catalog, {"Templates": ["テンプレート", "模板", "範本", "템플릿", "Plantillas", "Modelos", "Modèles", "Modelli"], "Add": ["追加", "添加", "新增", "추가", "Añadir", "Adicionar", "Ajouter", "Aggiungi"], "Save": ["保存", "保存", "儲存", "저장", "Guardar", "Guardar", "Enregistrer", "Salva"], "Template name": ["テンプレート名", "模板名称", "範本名稱", "템플릿 이름", "Nombre de plantilla", "Nome do modelo", "Nom du modèle", "Nome modello"], "One item per line. Use two spaces or a Tab to indent.": ["1行に1項目。半角スペース2つかTabで字下げします。", "每行一个条目，用两个空格或 Tab 缩进。", "每行一個項目，用兩個空格或 Tab 縮排。", "한 줄에 한 항목. 공백 두 개 또는 Tab으로 들여쓰기합니다.", "Un elemento por línea. Usa dos espacios o Tab para sangrar.", "Um item por linha. Use dois espaços ou Tab para indentar.", "Un élément par ligne. Deux espaces ou Tab pour indenter.", "Un elemento per riga. Due spazi o Tab per rientrare."], "Restore defaults": ["標準に戻す", "恢复默认", "還原預設", "기본값 복원", "Restaurar valores", "Restaurar predefinições", "Rétablir par défaut", "Ripristina predefiniti"], "Invalid templates": ["テンプレートの形式が正しくありません", "模板格式无效", "範本格式無效", "잘못된 템플릿", "Plantillas no válidas", "Modelos inválidos", "Modèles invalides", "Modelli non validi"], "Use two spaces per indentation level": ["字下げ1段につき半角スペース2つを使ってください", "每级缩进使用两个空格", "每層縮排使用兩個空格", "들여쓰기 단계마다 공백 두 개를 사용하세요", "Usa dos espacios por nivel", "Use dois espaços por nível", "Utilisez deux espaces par niveau", "Usa due spazi per livello"]});
+
+Object.assign(catalog, {
+  "Workspace": ["ワークスペース", "工作区", "工作區", "작업 공간", "Espacio de trabajo", "Espaço de trabalho", "Espace de travail", "Area di lavoro"],
+  "AI Connections": ["AI接続", "AI 连接", "AI 連線", "AI 연결", "Conexiones de IA", "Ligações de IA", "Connexions IA", "Connessioni IA"]
+});
+
+Object.assign(catalog, {
+  "File or pasted content": ["ファイルまたは貼り付けた内容", "文件或粘贴内容", "檔案或貼上的內容", "파일 또는 붙여넣은 내용", "Archivo o contenido pegado", "Ficheiro ou conteúdo colado", "Fichier ou contenu collé", "File o contenuto incollato"],
+  "Template outline": ["テンプレートのアウトライン", "模板大纲", "範本大綱", "템플릿 아웃라인", "Esquema de plantilla", "Estrutura do modelo", "Plan du modèle", "Struttura del modello"],
+  "Connection details": ["接続の詳細", "连接详情", "連線詳細資料", "연결 세부 정보", "Detalles de conexión", "Detalhes da ligação", "Détails de la connexion", "Dettagli connessione"]
+});
+
 function translate(code, source, args) {
     if (typeof source !== "string") return "";
-    var index = languages.map(function(entry) { return entry.code; }).indexOf(normalize(code));
+    var normalized = normalize(code);
+    var index = legacyCodes.indexOf(normalized);
+    var extra = European.catalog[normalized];
     var hasTranslation = Object.prototype.hasOwnProperty.call(catalog, source);
     var hasEnglish = Object.prototype.hasOwnProperty.call(english, source);
-    var translated = index > 0 && hasTranslation ? catalog[source][index - 1] : hasEnglish ? english[source] : source;
+    var translated = extra && Object.prototype.hasOwnProperty.call(extra, source) ? extra[source] : index >= 0 && hasTranslation ? catalog[source][index] : hasEnglish ? english[source] : source;
     if (!hasTranslation && !hasEnglish) {
         var device = " (this device)", verify = " Use Connection test to verify.";
         if (source.endsWith(device)) translated = translate(code, source.slice(0, -device.length)) + translate(code, device);

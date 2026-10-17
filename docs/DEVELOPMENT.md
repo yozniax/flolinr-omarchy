@@ -368,3 +368,125 @@ expansion prompts, ahead of a separately labeled source outline. Existing scope
 and bullet-output constraints are retained. Other tasks ignore the field. Closing
 the panel clears it; opening expansion invalidates any previous preview. Tests
 cover UI submission, empty input, cross-task isolation and backend validation.
+
+### Embedded attachments (0.16.0)
+
+Nodes may carry an optional validated `attachment` with kind, name, MIME, language
+and content. Text/code retain their UTF-8 source; images and arbitrary binary files
+use base64. All data stays in the existing version-2 workspace; no source paths or
+external URLs are loaded by previews. Imported files are limited to 2 MB, images
+use bounded Qt Image sourceSize, SVG/HTML are displayed as inert source text, and
+all file pickers keep DontUseNativeDialog. Content is a separate block, never an
+editable outline TextArea string. Leaf attachments still expose a fold triangle.
+Merge/delete-at-start must not silently discard attachment metadata. Undo includes
+the entire embedded value; explicit removal leaves the heading and descendants.
+
+Model.createAiScope replaces attachment nodes with per-request tokens and excludes
+embedded content and filenames from the bridge request. The local snapshot retains
+original nodes. AI application verifies the snapshot, exact token multiplicity and
+original depth, then restores original nodes. Missing/changed/duplicated markers
+reject the entire replacement. Rich Markdown conversion restores source only after
+model generation; code fences are longer than any fence in the embedded source.
+AI-generated attachment metadata is rejected by all application paths.
+
+Markdown round trips use a validated URI-encoded metadata comment plus an inert
+rendered preview and a collision-checked end marker. OPML attributes carry the same
+metadata. Plaintext uses a base64-wrapped item line for embedded items so multiline
+metadata is not split into new nodes. The bridge request/import cap is now 32 MB;
+attachment import remains 2 MB and AI source limits remain 100 KB after redaction.
+
+Tests cover model nesting/folding/moves, JSON/Markdown/OPML/plaintext round trips,
+byte-preserving file extraction, source copying, invalid MIME/encoding/size, preview
+rendering, safe pickers, missing/duplicate/moved markers, stale snapshots and a real
+Quickshell outliner -> bridge -> fake CLI -> apply -> workspace save integration.
+The fake CLI asserts embedded private source and filenames never reach its stdin.
+
+### Slash insertion and attachment chrome (0.17.0)
+
+SlashMenu attaches to normal node editors and the zoom title. It only activates
+for a whole-node slash command, keeps keyboard focus in the editor, filters as the
+user types, and intercepts arrows/Enter/Esc without splitting the outline. Input
+method composition is respected. The only command, `/insert`, opens a shared
+modal offering an all-files Qt Quick picker or a Paste or Text area. Filename
+extensions take precedence over pasted-content format detection (Model.detectAttachmentFormat);
+unknown content falls back to plain text. The detected format is shown in the modal.
+The editor's current command
+text is captured and checked when the helper returns, so a changed target cannot
+be overwritten. Model.replaceWithAttachment preserves ID/depth/descendants and
+clears the command text. New attachment nodes do not duplicate filenames in text.
+
+AttachmentView always stays loaded, while its inner content Loader unloads on
+collapse. The small right-aligned filename and English expand/collapse/delete
+controls remain available. Legacy attachment headings are hidden too. Editing and
+file extraction are secondary actions in the filename context menu. Attached items
+accept structural keyboard navigation while their hidden title editors do not.
+Tests exercise actual slash typing and selection, unchanged literal URLs, cancel,
+same-node replacement, stale-target rejection, footer layout, content unloading,
+and real Quickshell AI protection after a slash replacement.
+
+### Sidebar Roll ordering (0.18.0)
+
+RollEntry uses an internal Qt Quick drag with an insertion line and drops above or
+below the target midpoint. Click, double-click rename, and right-click icon selection
+remain separate from dragging. Model.reorderRolls returns a new workspace array,
+reorders only matching archive sections, and preserves daily-note positions.
+Outliner commits the active nodes, updates the array, and saves immediately.
+QtTest exercises real upward/downward drag gestures and click behavior; model tests
+check workspace persistence and section boundaries.
+
+### Default workspace content (0.19.0)
+
+StarterContent.js is the single source of truth for the five English manuals. Its
+templates omit IDs and timestamps. Model.initialWorkspace clones all nested content
+and allocates fresh IDs/timestamps. WorkspaceStore only invokes it for a missing
+workspace file; loading version 2 or migrating version 1 never seeds guides.
+
+AttachmentView, OutlineNode and Outliner consistently use collapsed/collapseRequested/
+setAttachmentCollapsed, matching the existing persisted node.collapsed field. No
+saved schema migration is needed. JS tests share tests/load-model.cjs, mirroring the
+QML JS import. test_starter_workspace.py verifies initial creation, save, user
+removal and two actual Quickshell restarts without reinserting a deleted guide.
+
+### Slash commands and locale ordering (0.20.0)
+
+CommandActions.js owns the command registry, built-in template definitions, stale
+command-target validation, task syntax, date validation and internal link encoding.
+CommandDialog handles date/link/template selection; Outliner owns mutations,
+undo snapshots, persistence and jump/AI scope transitions. SlashMenu uses the shared
+registry and retains editor focus for keyboard selection and IME safety.
+
+No workspace schema change is needed: `[ ]`/`[x]` prefixes represent tasks, `---`
+is a divider, ISO text represents dates, and full Markdown links with flolinr://
+URIs represent internal links. OutlineNode renders these with checkbox/line/link
+controls while preserving plain text at persistence and interchange boundaries.
+Todo editing translates cursor offsets between the hidden marker and raw text.
+
+EuropeanTranslations.js contains complete code-keyed da/de/ru/pl catalogs.
+Translations.languages defines presentation order; legacyCodes independently maps
+the existing eight catalog columns. Changing menu order cannot reinterpret saved
+language codes or select another translation column. English remains the fallback.
+
+Tests cover all slash selections with actual keys; keyboard-only modal selection;
+cancellation and stale targets; task editing offsets; command round trips; actual
+outliner mutations, task Undo/Redo, internal-link jump and AI branch boundaries;
+all thirteen settings save/restart paths; all new catalog keys and placeholders.
+
+### Command focus and template settings (0.21.0)
+
+Outliner.restoreCommandFocus runs after popup/modal focus restoration; CommandDialog
+returns the inserted focus ID and restores it onClosed, including cancellation.
+AttachmentDialog follows the same path. Existing retry logic handles ListView
+recreation; the zoom title is focused directly for commands on a zoom root.
+The real-window regression test checks activeFocus on the actual editor delegate.
+
+Templates.js separates template validation and indentation conversion from commands.
+AppSettings owns template persistence; saveTemplates reads the current settings file
+so a pending workspace-path change is preserved. TemplateManager edits detached
+drafts, commits on selection/save, and supports empty collections and reset.
+CommandDialog uses the saved collection, not just built-in definitions.
+
+OutlineNode sizes internal links/dividers from displayed content, not hidden editor
+contentHeight. CommandActions.linkify escapes all markup, links only HTTP(S), and
+keeps text as the persistence format. Rich URL previews are used outside active
+editing; code and attachment bodies remain inert. The `/ai` registry/dispatch path
+is removed while the existing toolbar AI behavior remains unchanged.

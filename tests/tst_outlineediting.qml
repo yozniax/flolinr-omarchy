@@ -18,6 +18,8 @@ TestCase {
         property var split: null
         property string merged: ""
         property var actionTaken: null
+        property var slash: null
+        function openSlashCommand(id, command) { slash={id:id,command:command}; }
         function nodeColor(color) { return "white"; }
         function snapshot() {}
         function changed() {}
@@ -33,6 +35,29 @@ TestCase {
         controller.movement=null; controller.merged=""; controller.split=null; controller.actionTaken=null;
         row.edit({position:0}); wait(10);
         return findChild(row,"outlineEditor");
+    }
+    function test_slash_menu_filters_and_enter_chooses_without_splitting() {
+        var e=setup(""); controller.slash=null;
+        [Qt.Key_Slash,Qt.Key_I,Qt.Key_N,Qt.Key_S,Qt.Key_E,Qt.Key_R,Qt.Key_T].forEach(function(k) { keyClick(k); });
+        var menu=findChild(row,"nodeSlashMenu");
+        tryCompare(menu,"opened",true); compare(menu.matches.length,1);
+        keyClick(Qt.Key_Return);
+        compare(controller.slash.id,"a"); compare(controller.slash.command,"insert");
+        compare(controller.split,null); compare(e.text,"/insert");
+        e=setup(""); keyClick(Qt.Key_Slash); tryCompare(menu,"opened",true);
+        keyClick(Qt.Key_Return); compare(controller.slash.command,"insert");
+        e=setup(""); [Qt.Key_Slash,Qt.Key_I].forEach(function(k) { keyClick(k); }); tryCompare(menu,"opened",true);
+        keyClick(Qt.Key_Escape); tryCompare(menu,"opened",false); compare(e.text,"/i");
+        e=setup("https://example.com"); menu.update(); compare(menu.opened,false);
+    }
+    function test_every_slash_command_can_be_filtered_and_selected_with_keyboard() {
+        var commands=["insert","date","link","template"];
+        commands.forEach(function(command) {
+            setup("/"+command);controller.slash=null;
+            var menu=findChild(row,"nodeSlashMenu");menu.update();
+            tryCompare(menu,"opened",true);compare(menu.matches.length,1);
+            keyClick(Qt.Key_Return);compare(controller.slash.command,command);
+        });
     }
     function test_backspace_joins_only_at_unselected_start() {
         var e=setup("abc"); e.cursorPosition=0; keyClick(Qt.Key_Backspace);

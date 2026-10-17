@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import "AiSettings.js" as AI
 import "Translations.js" as Catalog
+import "Templates.js" as Templates
 
 Item {
     id: root
@@ -12,6 +13,7 @@ Item {
     property string dataPath: home + "/.local/share/flolinr/outline.json"
     property var aiConnections: []
     property string activeAiConnectionId: ""
+    property var templates: Templates.normalize(Templates.defaults)
     property string language: "en"
     onLanguageChanged: I18n.language = language
     property var pending: null
@@ -23,13 +25,22 @@ Item {
         if (typeof path !== "string" || !(path.startsWith("/") || path.startsWith("~/")) || !path.endsWith(".json")) throw new Error(I18n.t("Choose an absolute .json file path"));
         var ai = AI.migrate(value);
         return {dataPath: path.replace(/^~\//, root.home + "/"), aiConnections: ai.aiConnections, activeAiConnectionId: ai.activeAiConnectionId,
-            language: Catalog.normalize(value.language === undefined ? root.language : value.language)};
+            language: Catalog.normalize(value.language === undefined ? root.language : value.language),
+            templates: Templates.normalize(value.templates === undefined ? root.templates : value.templates)};
     }
     function save(path, connections, activeId, language) {
         try {
             pending = validate({dataPath: path, aiConnections: connections, activeAiConnectionId: activeId, language: language});
             file.setText(JSON.stringify(pending, null, 2)); root.error = "";
         } catch (e) { root.error = e.message; }
+    }
+    function saveTemplates(value) {
+        try {
+            var current = file.text() ? JSON.parse(file.text()) : {};
+            current.templates = Templates.normalize(value);
+            pending = validate(current);
+            file.setText(JSON.stringify(pending, null, 2)); root.error = ""; return true;
+        } catch (e) { root.error = e.message; return false; }
     }
     Process {
         command: ["mkdir", "-p", root.path.slice(0, root.path.lastIndexOf("/"))]
@@ -46,7 +57,7 @@ Item {
             if (root.ready) return;
             try {
                 var value = root.validate(JSON.parse(text()));
-                root.language = value.language; I18n.language = value.language;
+                root.templates = value.templates; root.language = value.language; I18n.language = value.language;
                 root.dataPath = value.dataPath; root.aiConnections = value.aiConnections; root.activeAiConnectionId = value.activeAiConnectionId; root.ready = true;
             } catch (e) { root.error = e.message; }
         }
@@ -58,6 +69,7 @@ Item {
             if (root.pending) {
                 root.aiConnections = root.pending.aiConnections;
                 root.activeAiConnectionId = root.pending.activeAiConnectionId;
+                root.templates = root.pending.templates;
                 root.language = root.pending.language;
                 root.pending = null;
             }

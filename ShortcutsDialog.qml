@@ -14,7 +14,7 @@ CompactDialog {
     anchors.centerIn: parent
     width: Math.min(640, parent ? parent.width - 32 : 640)
     height: Math.min(650, parent ? parent.height - 32 : 650)
-    title: I18n.t("Keyboard shortcuts")
+    title: "⌨️ " + I18n.t("Keyboard shortcuts")
     footer: ActionLink { text: I18n.t("Close · Esc"); flat: true; palette.buttonText: Commons.Color.foreground; onClicked: dialog.close(); }
     modal: true
     focus: true
@@ -34,18 +34,9 @@ CompactDialog {
                     id: section
                     required property var modelData
                     width: parent.width
-                    spacing: 5
-                    Item { width: 1; height: 9; }
-                    Label {
-                        objectName: "shortcutSectionTitle"
-                        width: parent.width
-                        text: I18n.t(section.modelData.title)
-                        color: Commons.Color.accent
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        wrapMode: Text.WordWrap
-                    }
-                    Rectangle { width: parent.width; height: 1; color: Commons.Color.foreground; opacity: 0.13; }
+                    spacing: 8
+                    Item { width: 1; height: 7; }
+                    ModalSection { objectName: "shortcutSectionTitle"; width: parent.width; title: section.modelData.title }
                     Repeater {
                         model: section.modelData.rows
                         Item {

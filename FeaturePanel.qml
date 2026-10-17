@@ -9,6 +9,7 @@ import qs.Commons as Commons
 CompactDialog {
     id: root
     required property var controller
+    signal editTemplatesRequested()
     property string mode: "settings"
     property var drafts: []
     property string selectedId: ""
@@ -27,7 +28,7 @@ CompactDialog {
     palette.highlight: Commons.Color.accent
     modal: true
     focus: true
-    title: mode === "ai" ? I18n.t("AI · current view") : I18n.t("Settings · AI connections")
+    title: mode === "ai" ? "✨ " + I18n.t("AI · current view") : "⚙️ " + I18n.t("Settings · AI connections")
     standardButtons: Dialog.NoButton
     closePolicy: controller.busy || workspacePicker.visible || markdownPicker.visible ? Popup.NoAutoClose : Popup.CloseOnEscape
     onClosed: { workspacePicker.close(); markdownPicker.close(); key.clear(); expandPrompt.clear(); expandPromptVisible = false; controller.aiBefore = ""; controller.aiPreviewReady = false; }
@@ -74,7 +75,7 @@ CompactDialog {
         id: markdownPicker
         objectName: "aiMarkdownPicker"
         parentWindow: root.parent ? root.parent.Window.window : null
-        title: I18n.t("Save AI Markdown")
+        title: "📤 " + I18n.t("Save AI Markdown")
         fileMode: Dialogs.FileDialog.SaveFile
         options: Dialogs.FileDialog.DontUseNativeDialog
         nameFilters: ["Markdown (*.md)"]
@@ -94,7 +95,7 @@ CompactDialog {
         id: workspacePicker
         objectName: "workspaceFilePicker"
         parentWindow: root.parent ? root.parent.Window.window : null
-        title: I18n.t("Choose workspace file (existing or new)")
+        title: "📁 " + I18n.t("Choose workspace file (existing or new)")
         fileMode: Dialogs.FileDialog.SaveFile
         // Selection only edits the draft path. Settings preserves existing files.
         options: Dialogs.FileDialog.DontUseNativeDialog | Dialogs.FileDialog.DontConfirmOverwrite
@@ -146,9 +147,9 @@ CompactDialog {
             contentWidth: availableWidth
             ColumnLayout {
                 width: parent.width
-                spacing: 8
+                spacing: 10
                 enabled: !root.controller.busy
-                Label { text: I18n.t("Language"); }
+                ModalSection { title: "Language" }
                 ComboBox {
                     id: languagePicker
                     objectName: "languagePicker"
@@ -156,7 +157,10 @@ CompactDialog {
                     model: I18n.languages
                     textRole: "name"
                 }
-                Label { text: I18n.t("Workspace file (.json)"); }
+                ModalSection { title: "Templates" }
+                ActionLink { objectName: "manageTemplates"; text: "📋 " + I18n.t("Templates"); onClicked: root.editTemplatesRequested(); }
+                ModalSection { title: "Workspace" }
+                Label { text: I18n.t("Workspace file (.json)"); opacity: 0.72; font.pixelSize: 12 }
                 RowLayout {
                     Layout.fillWidth: true
                     TextField { id: path; objectName: "workspacePath"; Layout.fillWidth: true; placeholderText: "/home/you/notes/outline.json"; }
@@ -167,7 +171,7 @@ CompactDialog {
                     wrapMode: Text.WordWrap
                     text: I18n.t("Choose an existing workspace or name a new .json file. Selection does not write a file. Save settings to apply; changing the workspace requires a shell reload.")
                 }
-                Label { text: I18n.t("AI connection · selected connection becomes active when saved"); Layout.fillWidth: true; wrapMode: Text.WordWrap; }
+                ModalSection { title: "AI Connections" }
                 ComboBox {
                     id: connectionPicker
                     objectName: "aiConnectionPicker"
@@ -193,7 +197,8 @@ CompactDialog {
                 ColumnLayout {
                     visible: !!root.selected
                     Layout.fillWidth: true
-                    Label { text: root.selected ? I18n.t(AI.labels[AI.providers.indexOf(root.selected.provider)]) : ""; }
+                    ModalSection { title: "Connection details" }
+                    Label { text: root.selected ? I18n.t(AI.labels[AI.providers.indexOf(root.selected.provider)]) : ""; opacity: 0.72; font.pixelSize: 12 }
                     TextField { id: name; objectName: "aiConnectionName"; Layout.fillWidth: true; placeholderText: I18n.t("Connection name"); onTextEdited: root.update("name", text); }
                     Label { text: I18n.t("Model ID"); }
                     TextField {
@@ -255,6 +260,7 @@ CompactDialog {
                     ColumnLayout {
                         visible: advanced.checked
                         Layout.fillWidth: true
+                        ModalSection { title: "Advanced" }
                         Label { visible: root.isCLI && root.selected.provider !== "custom"; text: I18n.t("CLI executable path (optional)"); }
                         TextField {
                             id: executable

@@ -29,6 +29,7 @@ Item {
     property string aiBefore: ""
     property string aiTask: ""
     property bool aiPreviewReady: false
+    property var aiProtection: ({items: []})
     signal markdownSaved(string path)
     signal result(string text)
     signal failure(string text)
@@ -77,7 +78,7 @@ Item {
                 var roll = editor.rolls[i];
                 var value = {operation: "export", path: path, format: format, overwrite: true, protectedPath: dataPath};
                 if (format === "markdown") value.text = Model.exportMarkdown(roll);
-                else value.roll = {name: roll.name, nodes: roll.nodes.map(function(n) { return {text: n.text, depth: n.depth}; })};
+                else value.roll = {name: roll.name, nodes: roll.nodes.map(function(n) { return {text: Model.interchangeText(n), depth: n.depth}; })};
                 run(value);
             }
         } catch (e) { failure(e.message); }
@@ -91,17 +92,18 @@ Item {
             if (!activeConnection) { aiSettingsNeeded(); return; }
             editor.commitRoll();
             aiRollId = editor.activeRollId; aiNodeId = editor.zoom;
-            aiBefore = Model.scopeSnapshot(editor.nodes, aiNodeId);
+            aiProtection = Model.createAiScope(editor.nodes, aiNodeId);
+            aiBefore = aiProtection.snapshot;
             var outline = JSON.parse(aiBefore);
             if (!outline.length) throw new Error(I18n.t("Add an item before using AI"));
-            run({operation: "ai", task: task, instructions: task === "expand" ? instructions || "" : "", scope: aiNodeId ? "branch" : "roll", connection: activeConnection, text: Model.markdownNodes(outline, outline[0].depth)});
+            run({operation: "ai", task: task, protectAttachments: aiProtection.items.length > 0, instructions: task === "expand" ? instructions || "" : "", scope: aiNodeId ? "branch" : "roll", connection: activeConnection, text: aiProtection.text});
         } catch (e) { failure(e.message); }
     }
     function applyAI(text) {
         try {
             if (aiTask === "markdown" || !aiPreviewReady) throw new Error(I18n.t("Generate an outline preview before applying"));
             if (!aiBefore || editor.activeRollId !== aiRollId || editor.zoom !== aiNodeId) throw new Error(I18n.t("The displayed scope changed. Generate a new preview first"));
-            var next = Model.applyScope(editor.nodes, aiNodeId, aiBefore, text);
+            var next = Model.applyScope(editor.nodes, aiNodeId, aiBefore, text, aiProtection);
             editor.snapshot(); editor.nodes = next; editor.changed(); editor.refresh();
             if (editor.rows.length) editor.focusNode(editor.rows[0].id);
             aiBefore = ""; done();
@@ -111,6 +113,12 @@ Item {
         if (busy || aiTask !== "markdown" || !aiPreviewReady || !text.trim()) return;
         run({operation: "export", path: path, format: "markdown", text: text,
             overwrite: true, protectedPath: dataPath, aiMarkdown: true});
+    }
+    function loadAttachment(path, parentId, replaceId, expectedText) {
+        if (!busy) run({operation: "attachment_import", path: path, parentId: parentId, replaceId: replaceId, expectedText: expectedText, rollId: editor.activeRollId});
+    }
+    function saveAttachment(path, attachment) {
+        if (!busy) run({operation: "attachment_export", path: path, attachment: attachment, protectedPath: dataPath});
     }
     Process {
         id: process
@@ -136,9 +144,15 @@ Item {
                     root.done();
                     if (response.warnings && response.warnings.length)
                         root.notice(I18n.t("Imported {0} items.", [roll.nodes.length]) + "\n\n" + response.warnings.map(function(warning) { return I18n.t(warning); }).join("\n"));
-                } else if (job.operation === "export" && job.aiMarkdown) root.markdownSaved(response.path);
+                } else if (job.operation === "attachment_import") {
+                    if (root.editor.activeRollId !== job.rollId) throw new Error("The insertion target changed");
+                    root.editor.insertAttachment(response.attachment, job.parentId, job.replaceId, job.expectedText); root.done();
+                } else if (job.operation === "attachment_export") root.result(I18n.t("Exported: {0}", [response.path]));
+                else if (job.operation === "export" && job.aiMarkdown) root.markdownSaved(response.path);
                 else if (job.operation === "export") root.result(I18n.t("Exported: {0}", [response.path]));
                 else {
+                    if (job.operation === "ai" && job.task === "markdown" && root.aiProtection.items.length)
+                        response.text = Model.restoreMarkdownAttachments(response.text, root.aiProtection);
                     if (job.operation === "ai") root.aiPreviewReady = true;
                     root.result(response.text);
                 }

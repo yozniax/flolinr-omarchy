@@ -5,6 +5,7 @@ import QtQuick.Layouts
 import Quickshell
 import qs.Commons as Commons
 import "Model.js" as Model
+import "CommandActions.js" as Commands
 
 Item {
     id: root
@@ -17,9 +18,9 @@ Item {
         editor: root
         settings: appSettings
         onResult: function(text) { if (featurePanel.opened) featurePanel.showResult(text); else root.status = text; }
-        onFailure: function(text) { if (featurePanel.opened) featurePanel.failure(text); else { root.status = text; transferNotice.show(I18n.t("Could not complete import / export"), text); } }
+        onFailure: function(text) { if (attachmentDialog.opened) attachmentDialog.failure(text); else if (featurePanel.opened) featurePanel.failure(text); else { root.status = text; transferNotice.show(I18n.t("Could not complete import / export"), text); } }
         onNotice: function(text) { transferNotice.show(I18n.t("Import completed"), text); }
-        onDone: featurePanel.close()
+        onDone: { featurePanel.close(); attachmentDialog.close(); }
         onAiStatus: function(text) { featurePanel.connectionStatus(text); }
         onAiSettingsNeeded: featurePanel.show("settings")
     }
@@ -90,9 +91,6 @@ Item {
         if (last && last.depth === 0 && !last.text) refresh(last.id, {position: 0});
         else addFirst();
     }
-    property bool navRollsOpen: true
-    property bool navActiveOpen: true
-    property bool navArchivedOpen: true
     property string deleteTarget: ""
     property string deleteName: ""
     readonly property bool archived: {
@@ -124,7 +122,14 @@ Item {
     readonly property string rollIcon: {
         var revision = root.revision;
         var i = Model.indexOf(rolls, activeRollId);
-        return i < 0 ? "📄" : rolls[i].icon || (rolls[i].name === "Inbox" ? "📥" : "📄");
+        return i < 0 ? "🧾" : defaultRollIcon(rolls[i]);
+    }
+    function defaultRollIcon(roll) { return !roll.icon || roll.icon === "📄" ? "🧾" : roll.icon; }
+    function reorderRoll(sourceId, targetId, after) {
+        if (!ready || !workspaceStore.writable) return;
+        var reordered = Model.reorderRolls(rolls, sourceId, targetId, after);
+        if (!reordered) return;
+        commitRoll(); rolls = reordered; changed(); save();
     }
     function chooseIcon() { iconInput.text = rollIcon; iconDialog.open(); Qt.callLater(function() { iconGrid.forceActiveFocus(); }); }
     function setRollIcon(value) {
@@ -139,7 +144,106 @@ Item {
         var revision = root.revision;
         return Model.activity(rolls, selectedDay, calendarMode);
     }
-    readonly property bool editingAllowed: ready && !searchDialog.opened && !deleteDialog.opened && !helpDialog.opened && !rollDialog.opened && !calendarDialog.opened && !infoDialog.opened && !iconDialog.opened && !colorMenu.opened && !featurePanel.opened && !capture.opened && !fileTransfer.opened && !transferNotice.opened
+    readonly property bool editingAllowed: ready && !searchDialog.opened && !deleteDialog.opened && !helpDialog.opened && !rollDialog.opened && !calendarDialog.opened && !infoDialog.opened && !iconDialog.opened && !colorMenu.opened && !featurePanel.opened && !capture.opened && !fileTransfer.opened && !transferNotice.opened && !attachmentDialog.opened && !attachmentDialog.choosing && !commandDialog.opened && !templateManager.opened
+    readonly property string zoomText: { var revision = root.revision; var i = Model.indexOf(nodes, zoom); return i < 0 ? "" : nodes[i].text; }
+    readonly property var zoomAttachment: { var revision = root.revision; var i = Model.indexOf(nodes, zoom); return i < 0 ? null : nodes[i].attachment || null; }
+    readonly property bool zoomAttachmentCollapsed: { var revision = root.revision; var i = Model.indexOf(nodes, zoom); return i >= 0 && nodes[i].collapsed; }
+    readonly property var commandTemplates: appSettings.templates
+    function restoreCommandFocus(id) {
+        if (!id) return;
+        Qt.callLater(function() {
+            if (id === root.zoom) { zoomTitle.forceActiveFocus(); zoomTitle.cursorPosition = zoomTitle.length; }
+            else root.focusNode(id);
+        });
+    }
+    function openSlashCommand(id, command) {
+        if (!ready || features.busy || Commands.commands.indexOf(command) < 0) return;
+        var i = Model.indexOf(nodes, id);
+        if (i < 0) return;
+        try {
+            Commands.target(nodes, id, nodes[i].text);
+            if (command === "insert") attachmentDialog.showSlash(id, command);
+            else if (["date", "link", "template"].indexOf(command) >= 0) commandDialog.show(id, command);
+            else applySlashCommand(id, command, nodes[i].text, null);
+        } catch (e) { transferNotice.show(I18n.t("Could not complete action"), I18n.t(e.message)); }
+    }
+    function applySlashCommand(id, command, expected, value) {
+        Commands.target(nodes, id, expected);
+        var text = "", focus = id;
+        if (command === "date") text = Commands.dateText(value);
+        else if (command === "link") {
+            var r = Model.indexOf(rolls, value.rollId);
+            if (r < 0) throw new Error("The linked item no longer exists");
+            var item = value.nodeId ? rolls[r].nodes[Model.indexOf(rolls[r].nodes, value.nodeId)] : null;
+            if (value.nodeId && !item) throw new Error("The linked item no longer exists");
+            text = Commands.linkText(rolls[r], item);
+        } else if (command !== "template") throw new Error("Unknown command");
+        if (command === "template" && !commandTemplates[value]) throw new Error("Choose a template");
+        snapshot();
+        if (command === "template") focus = Commands.insertTemplate(nodes, id, expected, value, commandTemplates);
+        else Commands.replace(nodes, id, expected, text);
+        changed(); refresh(focus);
+        restoreCommandFocus(focus);
+        return focus;
+    }
+
+    function toggleTodo(id) {
+        var i = Model.indexOf(nodes, id);
+        if (!ready || i < 0 || Commands.todoState(nodes[i].text) === null) return;
+        snapshot(); nodes[i].text = Commands.toggleTodo(nodes[i].text);
+        Model.touch([nodes[i]]); changed(); refresh(id);
+    }
+    function clearTodo(id) {
+        var i = Model.indexOf(nodes, id);
+        if (!ready || i < 0 || Commands.todoState(nodes[i].text) === null) return;
+        snapshot(); nodes[i].text = nodes[i].text.replace(/^\[[ xX]\]\s?/, "");
+        Model.touch([nodes[i]]); changed(); refresh(id, {position: 0});
+    }
+    function followInternalLink(link) {
+        if (!ready || !link) return;
+        var r = Model.indexOf(rolls, link.rollId);
+        if (r < 0 || (link.nodeId && Model.indexOf(rolls[r].nodes, link.nodeId) < 0)) {
+            transferNotice.show(I18n.t("Link unavailable"), I18n.t("The linked item no longer exists")); return;
+        }
+        selectRoll(link.rollId, false); search.text = ""; query = ""; zoom = link.nodeId; refresh();
+        if (zoom) Qt.callLater(function() { zoomTitle.forceActiveFocus(); });
+    }
+    function insertAttachment(attachment, parentId, replaceId, expectedText) {
+        if (!ready) return;
+        Model.validateAttachment(attachment);
+        if (parentId && Model.indexOf(nodes, parentId) < 0) throw new Error("The insertion target changed");
+        var target = replaceId ? Model.indexOf(nodes, replaceId) : -1;
+        if (replaceId && (target < 0 || nodes[target].attachment || nodes[target].text !== expectedText)) throw new Error("The insertion target changed");
+        snapshot();
+        var id = replaceId ? Model.replaceWithAttachment(nodes, replaceId, attachment, expectedText) : Model.insertAttachment(nodes, parentId, attachment);
+        changed(); refresh(id);
+    }
+    function updateAttachment(id, attachment) {
+        var i = Model.indexOf(nodes, id);
+        if (!ready || i < 0 || !nodes[i].attachment) throw new Error("The insertion target changed");
+        Model.validateAttachment(attachment); snapshot();
+        nodes[i].attachment = JSON.parse(JSON.stringify(attachment));
+        Model.touch([nodes[i]]); changed(); refresh(id);
+    }
+    function removeAttachment(id) {
+        var i = Model.indexOf(nodes, id);
+        if (!ready || i < 0 || !nodes[i].attachment) return;
+        snapshot();
+        if (nodes[i].text === nodes[i].attachment.name) nodes[i].text = "";
+        delete nodes[i].attachment; Model.touch([nodes[i]]); changed(); refresh(id);
+    }
+    function setAttachmentCollapsed(id, collapsed) {
+        var i = Model.indexOf(nodes, id);
+        if (!ready || i < 0 || !nodes[i].attachment || nodes[i].collapsed === collapsed) return;
+        nodes[i].collapsed = collapsed; changed(); refresh(id);
+    }
+    function addAfterAttachment(id) {
+        var i = Model.indexOf(nodes, id);
+        if (!ready || i < 0) return;
+        snapshot();
+        var value = Model.node("", nodes[i].depth);
+        nodes.splice(Model.endOf(nodes, i), 0, value); changed(); refresh(value.id);
+    }
     function focusNode(id) { refresh(id || (rows.length ? rows[0].id : "")); }
     function prepareInput() {
         if (!ready) return;
@@ -263,10 +367,6 @@ Item {
         commitRoll();
         rollStates[activeRollId] = {zoom: zoom, undo: undoStack, redo: redoStack};
         activeRollId = id;
-        if (!rolls[i].memopadDate) {
-            navRollsOpen = true;
-            if (rolls[i].archived) navArchivedOpen = true; else navActiveOpen = true;
-        }
         nodes = rolls[i].nodes;
         var state = rollStates[id] || {zoom: "", undo: [], redo: []};
         zoom = state.zoom; undoStack = state.undo; redoStack = state.redo;
@@ -395,10 +495,20 @@ Item {
             if (Model.indent(nodes, i, direction)) Model.touch(branch);
         } else if (kind === "move") { if (Model.move(nodes, i, direction)) Model.touch(branch); }
         else if (kind === "fold") nodes[i].collapsed = !nodes[i].collapsed;
-        else if (kind === "delete" && !nodes[i].text && Model.endOf(nodes, i) === i + 1) {
+        else if (kind === "delete" && !nodes[i].attachment && !nodes[i].text && Model.endOf(nodes, i) === i + 1) {
             nodes.splice(i, 1); id = nodes[Math.max(0, i - 1)] ? nodes[Math.max(0, i - 1)].id : "";
         }
         refresh(id); changed();
+    }
+    function removeNode(id) {
+        if (!ready || query) return;
+        var i = Model.indexOf(nodes, id);
+        if (i < 0) return;
+        var end = Model.endOf(nodes, i);
+        var focusId = nodes[end] ? nodes[end].id : (i > 0 ? nodes[i - 1].id : "");
+        snapshot();
+        nodes.splice(i, end - i);
+        changed(); refresh(focusId);
     }
     function addFirst() {
         if (!ready || query) return;
@@ -472,14 +582,17 @@ Item {
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.calendar; enabled: root.editingAllowed; onActivated: root.showCalendar(); }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.timestamps; enabled: root.editingAllowed; onActivated: root.showInfo(); }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.close; enabled: root.editingAllowed; onActivated: root.requestClose(); }
-        Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.focusRolls; enabled: root.editingAllowed; onActivated: { if (rollList.activeFocus) root.focusNode(root.focusedNode); else { root.navRollsOpen = true; root.navActiveOpen = true; rollList.forceActiveFocus(); } } }
+        Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.focusRolls; enabled: root.editingAllowed; onActivated: { if (rollList.activeFocus) root.focusNode(root.focusedNode); else rollList.forceActiveFocus(); } }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.emoji; enabled: root.editingAllowed; onActivated: root.chooseIcon(); }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.today; enabled: root.editingAllowed; onActivated: root.openMemopad(root.todayKey); }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.archive; enabled: root.editingAllowed; onActivated: root.toggleArchive(); }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.deleteRoll; enabled: root.editingAllowed && root.archived; onActivated: root.requestDelete(); }
         Shortcut { context: Qt.WindowShortcut; sequence: root.keybindings.focusCalendar; enabled: root.editingAllowed; onActivated: root.showCalendar(); }
-        FeaturePanel { id: featurePanel; controller: features }
+        FeaturePanel { id: featurePanel; controller: features; onEditTemplatesRequested: templateManager.show() }
         FileTransfer { id: fileTransfer; controller: features }
+        AttachmentDialog { id: attachmentDialog; controller: features }
+        CommandDialog { id: commandDialog; controller: root }
+        TemplateManager { id: templateManager; settings: appSettings }
         CompactDialog {
             id: transferNotice
             parent: Overlay.overlay
@@ -490,7 +603,7 @@ Item {
             standardButtons: Dialog.NoButton
             property string message: ""
             onClosed: if (root.ready) root.focusNode(root.focusedNode || (root.nodes.length ? root.nodes[0].id : ""))
-            function show(title, text) { transferNotice.title = title; message = text; open(); }
+            function show(title, text) { transferNotice.title = "ℹ️ " + title; message = text; open(); }
             contentItem: Label { text: I18n.t(transferNotice.message); wrapMode: Text.WordWrap; }
             footer: ActionLink { text: I18n.t("Close · Esc"); onClicked: transferNotice.close(); }
         }
@@ -500,7 +613,7 @@ Item {
             anchors.centerIn: parent
             width: Math.min(600, window.width - 32)
             height: Math.min(440, window.height - 32)
-            title: I18n.t("Search all Rolls and daily notes")
+            title: "🔍 " + I18n.t("Search all Rolls and daily notes")
             modal: true; focus: true
             standardButtons: Dialog.NoButton
             onOpened: { root.commitRoll(); search.forceActiveFocus(); search.selectAll(); }
@@ -539,7 +652,7 @@ Item {
             parent: Overlay.overlay
             anchors.centerIn: parent
             width: Math.min(440, window.width - 32)
-            title: I18n.t("Delete archived Roll?")
+            title: "🗑️ " + I18n.t("Delete archived Roll?")
             modal: true; focus: true
             standardButtons: Dialog.NoButton
             contentItem: Column {
@@ -558,7 +671,7 @@ Item {
             anchors.centerIn: parent
             width: Math.min(400, window.width - 32)
             height: Math.min(360, window.height - 32)
-            title: I18n.t("Roll icon")
+            title: "😀 " + I18n.t("Roll icon")
             modal: true; focus: true
             standardButtons: Dialog.NoButton
             footer: ActionLink { text: I18n.t("Close · Esc"); onClicked: iconDialog.reject(); }
@@ -575,7 +688,7 @@ Item {
                     currentIndex: 0
                     keyNavigationEnabled: true
                     ScrollBar.vertical: ScrollBar {}
-                    model: ["📄", "📥", "📓", "📚", "📝", "🗂️", "💡", "🎯", "🚀", "🧠", "🌱", "🏡", "💼", "🛠️", "💻", "🎨", "🎵", "📅", "✅", "⭐", "🔥", "🌊", "🌙", "🧭", "🌿", "🌳", "🍃", "🌸", "🌻", "🍀", "☀️", "☁️", "🌈", "❄️", "⚡", "✨", "🔖", "📌", "📎", "✏️", "🖋️", "📐", "🔬", "🔭", "🧪", "⚙️", "🔧", "🧩", "🎲", "🎮", "🎬", "📷", "🎧", "🎤", "🎹", "🏃", "🚲", "🏕️", "✈️", "🌍", "🗺️", "🏔️", "☕", "🍵", "🍎", "🥗", "🐈", "🐕", "🦉", "🦋", "🐝", "🐙", "💬", "💭", "❤️", "🧡", "💛", "💚", "💙", "💜", "🤍", "🖤", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "🔶", "🔷", "🔹", "▪️", "◻️", "➰", "♾️", "🔗"]
+                    model: ["🧾", "🗞️", "📥", "📓", "📚", "📝", "🗂️", "💡", "🎯", "🚀", "🧠", "🌱", "🏡", "💼", "🛠️", "💻", "🎨", "🎵", "📅", "✅", "⭐", "🔥", "🌊", "🌙", "🧭", "🌿", "🌳", "🍃", "🌸", "🌻", "🍀", "☀️", "☁️", "🌈", "❄️", "⚡", "✨", "🔖", "📌", "📎", "✏️", "🖋️", "📐", "🔬", "🔭", "🧪", "⚙️", "🔧", "🧩", "🎲", "🎮", "🎬", "📷", "🎧", "🎤", "🎹", "🏃", "🚲", "🏕️", "✈️", "🌍", "🗺️", "🏔️", "☕", "🍵", "🍎", "🥗", "🐈", "🐕", "🦉", "🦋", "🐝", "🐙", "💬", "💭", "❤️", "🧡", "💛", "💚", "💙", "💜", "🤍", "🖤", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "🔶", "🔷", "🔹", "▪️", "◻️", "➰", "♾️", "🔗"]
                     Keys.onReturnPressed: root.setRollIcon(model[currentIndex])
                     Keys.onEnterPressed: root.setRollIcon(model[currentIndex])
                     delegate: ActionLink {
@@ -603,7 +716,7 @@ Item {
             parent: Overlay.overlay
             anchors.centerIn: parent
             width: Math.min(540, window.width - 32)
-            title: I18n.t("Node timestamps")
+            title: "🕒 " + I18n.t("Node timestamps")
             modal: true; focus: true
             standardButtons: Dialog.NoButton
             footer: ActionLink { text: I18n.t("Close · Esc"); onClicked: infoDialog.reject(); }
@@ -615,7 +728,7 @@ Item {
             anchors.centerIn: parent
             width: Math.min(400, window.width - 32)
             height: Math.min(460, window.height - 32)
-            title: I18n.t("Calendar")
+            title: "📅 " + I18n.t("Calendar")
             modal: true; focus: true
             standardButtons: Dialog.NoButton
             footer: ActionLink { text: I18n.t("Close · Esc"); onClicked: calendarDialog.reject(); }
@@ -679,14 +792,16 @@ Item {
                         }
                     }
                 }
-                Label { text: I18n.t("DAILY NOTE"); font.pixelSize: 10; opacity: 0.5; }
+                Item { width: 1; height: 4; }
+                ModalSection { title: "DAILY NOTE"; width: parent.width }
                 ActionLink {
                     width: parent.width
                     text: "📝  " + I18n.t("Daily note") + " · " + root.selectedDay + (root.selectedMemopads.length ? "" : " · " + I18n.t("Create"))
                     flat: true
                     onClicked: { calendarDialog.close(); root.openMemopad(root.selectedDay); }
                 }
-                Label { text: I18n.t("ROLL ACTIVITY") + " · " + root.selectedDay + " · " + I18n.t("{0} items", [root.dayActivity.length]); font.pixelSize: 10; opacity: 0.6; }
+                Item { width: 1; height: 4; }
+                Label { text: I18n.t("ROLL ACTIVITY") + " · " + root.selectedDay + " · " + I18n.t("{0} items", [root.dayActivity.length]); font.pixelSize: 12; font.weight: Font.DemiBold; opacity: 0.82; }
                 ListView {
                     id: activityList
                     width: parent.width
@@ -723,7 +838,7 @@ Item {
             parent: Overlay.overlay
             anchors.centerIn: parent
             width: Math.min(400, window.width - 32)
-            title: root.editingRollId ? I18n.t("Rename Roll") : I18n.t("New Roll")
+            title: root.editingRollId ? "✏️ " + I18n.t("Rename Roll") : "🧾 " + I18n.t("New Roll")
             modal: true
             focus: true
             standardButtons: Dialog.NoButton
@@ -745,7 +860,7 @@ Item {
         }
         Menu {
             id: colorMenu
-            title: I18n.t("Node color")
+            title: "🎨 " + I18n.t("Node color")
             Instantiator {
                 model: ["default", "blue", "green", "amber", "rose", "purple"]
                 onObjectAdded: function(index, object) { colorMenu.insertItem(index, object); }
@@ -788,18 +903,22 @@ Item {
                         spacing: 8
                         Layout.preferredHeight: 40
                         FlolinrIcon { Layout.preferredWidth: 26; Layout.preferredHeight: 26; }
-                        Row {
-                            spacing: 0
+                        RowLayout {
+                            spacing: 11
                             Layout.alignment: Qt.AlignVCenter
-                            Label { text: "Flolin"; color: Commons.Color.foreground; font.pixelSize: 18; font.bold: true; }
-                            Label { text: "r"; color: "#78c58b"; font.pixelSize: 18; font.bold: true; }
-                        }
-                        Label {
-                            text: root.manifest ? root.manifest.version : "0.11.2"
-                            color: Commons.Color.foreground
-                            opacity: 0.4
-                            font.pixelSize: 9
-                            Layout.alignment: Qt.AlignVCenter
+                            Row {
+                                spacing: 0
+                                Label { text: "Flolin"; color: Commons.Color.foreground; font.pixelSize: 18; font.bold: true; }
+                                Label { text: "r"; color: "#78c58b"; font.pixelSize: 18; font.bold: true; }
+                            }
+                            Label {
+                                objectName: "brandVersion"
+                                text: root.manifest ? root.manifest.version : "0.23.0"
+                                color: Commons.Color.foreground
+                                opacity: 0.4
+                                font.pixelSize: 9
+                                Layout.alignment: Qt.AlignVCenter
+                            }
                         }
                         Item { Layout.fillWidth: true; }
                     }
@@ -810,9 +929,10 @@ Item {
                         ActionLink {
                             id: todayLink
                             Layout.fillWidth: true
-                            text: I18n.t("Today's note")
+                            Layout.minimumWidth: 0
+                            text: "📝 " + I18n.t("Today's note")
                             enabled: root.ready
-                            contentItem: Label { text: todayLink.text; color: Commons.Color.foreground; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter; }
+                            contentItem: Label { text: todayLink.text; color: Commons.Color.foreground; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; }
                             onClicked: root.openMemopad(root.todayKey)
                         }
                         ActionLink {
@@ -832,26 +952,16 @@ Item {
                         ColumnLayout {
                             width: navigationScroll.availableWidth
                             spacing: 4
-                    ActionLink {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 26
-                        id: rollsBranch
-                        text: (root.navRollsOpen ? "▾ " : "▸ ") + I18n.t("Rolls")
-                        flat: true
-                        contentItem: Label { text: rollsBranch.text; color: Commons.Color.foreground; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter; }
-                        onClicked: root.navRollsOpen = !root.navRollsOpen
-                    }
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 16
-                        visible: root.navRollsOpen
+                        Layout.preferredHeight: 26
                         spacing: 2
                         ActionLink {
-                            id: activeBranch
+                            id: rollsBranch
                             Layout.fillWidth: true
-                            text: (root.navActiveOpen ? "▾ " : "▸ ") + I18n.t("Active")
-                            font.pixelSize: 12
-                            onClicked: root.navActiveOpen = !root.navActiveOpen
+                            text: "🗞️ " + I18n.t("Rolls")
+                            contentItem: Label { text: rollsBranch.text; color: Commons.Color.foreground; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter; }
+                            onClicked: rollList.forceActiveFocus()
                         }
                         ActionLink {
                             id: addRollLink
@@ -863,8 +973,6 @@ Item {
                     }
                     ListView {
                         id: rollList
-                        visible: root.navRollsOpen && root.navActiveOpen
-                        Layout.leftMargin: 32
                         Layout.fillWidth: true
                         Layout.preferredHeight: count ? count * 31 - 3 : 24
                         interactive: false
@@ -883,54 +991,25 @@ Item {
                     }
                     Component {
                         id: rollDelegate
-                        ItemDelegate {
-                            id: rollItem
-                            required property var modelData
+                        RollEntry {
                             width: ListView.view.width
-                            text: (modelData.icon || (modelData.name === "Inbox" ? "📥" : "📄")) + "  " + modelData.name
-                            height: 28
-                            highlighted: modelData.id === root.activeRollId
-                            onClicked: root.selectRoll(modelData.id)
-                            onDoubleClicked: { root.selectRoll(modelData.id); root.editRoll(false); }
-                            background: Rectangle {
-                                radius: 8
-                                color: rollItem.highlighted
-                                    ? Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.14)
-                                    : rollItem.hovered ? Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.055) : "transparent"
-                                border.width: rollItem.activeFocus ? 1 : 0
-                                border.color: Commons.Color.accent
-                            }
-                            contentItem: Label {
-                                text: rollItem.text
-                                color: Commons.Color.foreground
-                                font.pixelSize: 12
-                                elide: Text.ElideRight
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                acceptedButtons: Qt.RightButton
-                                onClicked: { root.selectRoll(rollItem.modelData.id); root.chooseIcon(); }
-                            }
-
+                            controller: root
                         }
                     }
+
                     ActionLink {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 16
                         Layout.preferredHeight: 24
-                        visible: root.navRollsOpen
+                        visible: root.archivedRolls.length > 0
                         id: archivedBranch
-                        text: (root.navArchivedOpen ? "▾ " : "▸ ") + I18n.t("Archived")
+                        text: "📦 " + I18n.t("Archived")
                         flat: true
                         contentItem: Label { text: archivedBranch.text; color: Commons.Color.foreground; opacity: 0.65; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; }
-                        onClicked: root.navArchivedOpen = !root.navArchivedOpen
+                        onClicked: archivedList.forceActiveFocus()
                     }
                     ListView {
                         id: archivedList
-                        visible: root.navRollsOpen && root.navArchivedOpen
-                        Layout.leftMargin: 32
+                        visible: root.archivedRolls.length > 0
                         Layout.fillWidth: true
                         Layout.preferredHeight: count ? count * 28 : 24
                         interactive: false
@@ -946,9 +1025,9 @@ Item {
                         }
                     }
 
-                    ActionLink { text: I18n.t("Import"); enabled: root.ready && !features.busy; onClicked: fileTransfer.open("import"); }
-                    ActionLink { text: I18n.t("Calendar"); enabled: root.ready; onClicked: root.showCalendar(); }
-                    ActionLink { text: I18n.t("Settings"); onClicked: featurePanel.show("settings"); }
+                    ActionLink { text: "📥 " + I18n.t("Import"); enabled: root.ready && !features.busy; onClicked: fileTransfer.open("import"); }
+                    ActionLink { text: "📅 " + I18n.t("Calendar"); enabled: root.ready; onClicked: root.showCalendar(); }
+                    ActionLink { text: "⚙️ " + I18n.t("Settings"); onClicked: featurePanel.show("settings"); }
                     Label { Layout.fillWidth: true; visible: !!appSettings.error; text: I18n.t(appSettings.error); wrapMode: Text.WordWrap; }
                     ActionLink {
                         Layout.fillWidth: true
@@ -982,11 +1061,11 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true; }
-                ActionLink { text: "AI"; enabled: root.ready && root.nodes.length > 0 && !features.busy; onClicked: featurePanel.show("ai"); }
-                ActionLink { text: I18n.t("Export"); enabled: root.ready && !features.busy; onClicked: fileTransfer.open("export"); }
-                ActionLink { text: I18n.t("Rename Roll"); flat: true; visible: !root.isMemopad; enabled: root.ready; onClicked: root.editRoll(false); }
-                ActionLink { text: root.archived ? I18n.t("Restore") : I18n.t("Archive"); flat: true; visible: !root.isMemopad; enabled: root.ready; onClicked: root.toggleArchive(); }
-                ActionLink { text: I18n.t("Delete"); flat: true; visible: root.archived; onClicked: root.requestDelete(); }
+                ActionLink { text: "✨ AI"; enabled: root.ready && root.nodes.length > 0 && !features.busy; onClicked: featurePanel.show("ai"); }
+                ActionLink { text: "📤 " + I18n.t("Export"); enabled: root.ready && !features.busy; onClicked: fileTransfer.open("export"); }
+                ActionLink { text: "✏️ " + I18n.t("Rename Roll"); flat: true; visible: !root.isMemopad; enabled: root.ready; onClicked: root.editRoll(false); }
+                ActionLink { text: root.archived ? "♻️ " + I18n.t("Restore") : "📦 " + I18n.t("Archive"); flat: true; visible: !root.isMemopad; enabled: root.ready; onClicked: root.toggleArchive(); }
+                ActionLink { text: "🗑️ " + I18n.t("Delete"); flat: true; visible: root.archived; onClicked: root.requestDelete(); }
             }
             Row {
                 id: crumbs
@@ -997,7 +1076,7 @@ Item {
                     model: {
                         var revision = root.revision;
                         var result = [], i = Model.indexOf(root.nodes, root.zoom);
-                        while (i >= 0) { result.unshift({id: root.nodes[i].id, text: root.nodes[i].text || I18n.t("Untitled")}); i = Model.parentOf(root.nodes, i); }
+                        while (i >= 0) { result.unshift({id: root.nodes[i].id, text: root.nodes[i].attachment ? root.nodes[i].attachment.language || root.nodes[i].attachment.kind : root.nodes[i].text || I18n.t("Untitled")}); i = Model.parentOf(root.nodes, i); }
                         return result;
                     }
                     ActionLink {
@@ -1009,6 +1088,7 @@ Item {
                 }
             }
             Row {
+                visible: !root.zoomAttachment
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.max(40, zoomTitle.contentHeight)
                 spacing: 12
@@ -1037,9 +1117,11 @@ Item {
                     padding: 0
                     background: Item {}
                     property bool sessionRecorded: false
+                    onInputMethodComposingChanged: if (!inputMethodComposing) zoomSlashMenu.update()
                     Keys.priority: Keys.BeforeItem
                     Keys.onPressed: function(event) {
                         if (readOnly || inputMethodComposing || (event.modifiers & (Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) return;
+                        if (zoomSlashMenu.handleKey(event)) return;
                         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                             event.accepted = true;
                             root.splitItem(root.zoom, selectionStart, selectionEnd);
@@ -1052,8 +1134,8 @@ Item {
                         }
                     }
                     onActiveFocusChanged: {
-                        if (activeFocus && root.zoom) root.focusedNode = root.zoom;
-                        else sessionRecorded = false;
+                        if (activeFocus && root.zoom) { root.focusedNode = root.zoom; zoomSlashMenu.update(); }
+                        else { sessionRecorded = false; zoomSlashMenu.close(); }
                     }
                     onTextChanged: {
                         if (!activeFocus || readOnly) return;
@@ -1062,11 +1144,62 @@ Item {
                             if (!sessionRecorded) { root.snapshot(); sessionRecorded = true; }
                             root.nodes[i].text = text; Model.touch([root.nodes[i]]); root.changed();
                         }
+                        zoomSlashMenu.update();
+                    }
+                    SlashMenu { id: zoomSlashMenu; editor: zoomTitle; controller: root; nodeId: root.zoom }
+                }
+            }
+            RowLayout {
+                visible: !!root.zoom && (Commands.todoState(root.zoomText) !== null || !!Commands.parseLink(root.zoomText) || Commands.hasUrl(root.zoomText))
+                Layout.fillWidth: true
+                ActionLink {
+                    visible: Commands.todoState(root.zoomText) !== null
+                    text: Commands.todoState(root.zoomText) === true ? "☑" : "☐"
+                    Accessible.name: I18n.t("Task")
+                    onClicked: root.toggleTodo(root.zoom)
+                }
+                ActionLink {
+                    visible: !!Commands.parseLink(root.zoomText)
+                    text: "🔗 " + (Commands.parseLink(root.zoomText) || {}).label
+                    onClicked: root.followInternalLink(Commands.parseLink(root.zoomText))
+                }
+                Text {
+                    visible: Commands.hasUrl(root.zoomText) && !Commands.parseLink(root.zoomText)
+                    Layout.fillWidth: true
+                    text: Commands.linkify(root.zoomText)
+                    textFormat: Text.RichText
+                    wrapMode: Text.Wrap
+                    color: Commons.Color.foreground
+                    linkColor: Commons.Color.accent
+                    font.pixelSize: 13
+                    onLinkActivated: function(link) { if (/^https?:\/\//i.test(link)) Qt.openUrlExternally(link); }
+                }
+            }
+            ColumnLayout {
+                visible: !!root.zoomAttachment
+                Layout.fillWidth: true
+                Layout.maximumWidth: 760
+                Layout.alignment: Qt.AlignHCenter
+                Loader {
+                    id: zoomAttachmentBody
+                    Layout.fillWidth: true
+                    active: !!root.zoomAttachment
+                    Layout.preferredHeight: item ? item.implicitHeight : 0
+                    sourceComponent: AttachmentView {
+                        width: zoomAttachmentBody.width
+                        attachment: root.zoomAttachment
+                        collapsed: root.zoomAttachmentCollapsed
+                        onExpandRequested: root.setAttachmentCollapsed(root.zoom, false)
+                        onCollapseRequested: root.setAttachmentCollapsed(root.zoom, true)
+                        onEditRequested: attachmentDialog.showEdit(root.zoom)
+                        onSaveRequested: attachmentDialog.saveFile(root.zoomAttachment)
+                        onRemoveRequested: root.removeAttachment(root.zoom)
                     }
                 }
             }
             OutlineList {
                 id: list
+                objectName: "outlineList"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.maximumWidth: 760
@@ -1078,8 +1211,22 @@ Item {
                     width: list.width
                     controller: root
                     onColorRequested: function(nodeId) { root.colorTarget = nodeId; colorMenu.popup(); }
+                    onEditAttachmentRequested: function(nodeId) { attachmentDialog.showEdit(nodeId); }
+                    onSaveAttachmentRequested: function(attachment) { attachmentDialog.saveFile(attachment); }
+                    onRemoveAttachmentRequested: function(nodeId) { root.removeAttachment(nodeId); }
                 }
                 footer: ActionLink { text: "[+]"; Accessible.name: I18n.t("Add item"); flat: true; enabled: root.ready && !root.query; onClicked: root.addFirst(); }
+            }
+            ActionLink {
+                objectName: "authorCredit"
+                Layout.alignment: Qt.AlignRight
+                text: "by DoYoBe"
+                font.pixelSize: 9
+                horizontalPadding: 0
+                verticalPadding: 0
+                implicitHeight: 14
+                Accessible.name: "by DoYoBe — www.doyo.be"
+                onClicked: Qt.openUrlExternally("https://www.doyo.be/")
             }
         }
         }

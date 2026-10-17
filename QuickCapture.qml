@@ -16,7 +16,7 @@ Item {
     function saved() { input.text = ""; saving = false; error = ""; close(); }
     FloatingWindow {
         id: window
-        title: I18n.t("Flolinr · Quick note")
+        title: "📝 " + I18n.t("Flolinr · Quick note")
         visible: false
         implicitWidth: 540
         implicitHeight: root.error ? 108 : 70

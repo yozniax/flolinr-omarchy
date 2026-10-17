@@ -1,3 +1,5 @@
+.import "StarterContent.js" as StarterContent
+
 function node(text, depth) {
     var now = new Date().toISOString();
     return {createdAt: now, updatedAt: now, id: Date.now().toString(36) + Math.random().toString(36).slice(2), text: text || "", depth: depth || 0, collapsed: false, color: "default"};
@@ -24,7 +26,8 @@ function visible(nodes, zoom, query) {
             hidden = nodes[i].collapsed ? nodes[i].depth : -1;
         }
         result.push({id: nodes[i].id, text: nodes[i].text, depth: query ? 0 : nodes[i].depth - base,
-            color: nodes[i].color || "default", collapsed: nodes[i].collapsed, children: endOf(nodes, i) > i + 1});
+            attachment: nodes[i].attachment || null,
+            color: nodes[i].color || "default", collapsed: nodes[i].collapsed, children: endOf(nodes, i) > i + 1 || !!nodes[i].attachment});
     }
     return result;
 }
@@ -80,6 +83,7 @@ function mergeNode(nodes, i, previousId) {
     if (i <= 0 || i >= nodes.length || p < 0 || p >= i) return null;
     for (var j = p + 1; j < i; j++) if (nodes[j].depth <= nodes[p].depth) return null;
     var current = nodes[i], previous = nodes[p], position = previous.text.length;
+    if (current.attachment || previous.attachment) return null;
     var end = endOf(nodes, i), delta = previous.depth - current.depth;
     var descendants = nodes.slice(i + 1, end);
     descendants.forEach(function(n) { n.depth += delta; });
@@ -98,6 +102,7 @@ function validate(data) {
             typeof n.collapsed !== "boolean") throw new Error("Invalid outline");
         if (n.color !== undefined && ["default", "blue", "green", "amber", "rose", "purple"].indexOf(n.color) < 0)
             throw new Error("Invalid node color");
+        if (n.attachment !== undefined) validateAttachment(n.attachment);
         ["createdAt", "updatedAt"].forEach(function(key) {
             if (n[key] !== undefined && n[key] !== null &&
                 (typeof n[key] !== "string" || !Number.isFinite(new Date(n[key]).getTime())))
@@ -109,7 +114,7 @@ function validate(data) {
 }
 
 function createRoll(name, nodes) {
-    return {id: node("", 0).id, name: name.trim() || "Untitled Roll", icon: "📄", archived: false, nodes: nodes || []};
+    return {id: node("", 0).id, name: name.trim() || "Untitled Roll", icon: "🧾", archived: false, nodes: nodes || []};
 }
 function workspace(data) {
     if (data && data.version === 1) {
@@ -221,12 +226,16 @@ function encodeWorkspace(activeRollId, rolls) {
     return JSON.stringify(workspace(data), null, 2);
 }
 function initialWorkspace() {
-    var roll = createRoll("Inbox", [
-        node("Welcome to Flolinr", 0),
-        node("Press Enter to add an item, Tab to indent", 1),
-        node("Click a bullet to zoom into an item", 1)
-    ]);
-    return {version: 2, activeRollId: roll.id, rolls: [roll]};
+    var rolls = StarterContent.rolls.map(function(template) {
+        var nodes = template.nodes.map(function(item) {
+            // Every fresh workspace owns its IDs, timestamps and nested attachments.
+            return Object.assign(node(item.text, item.depth), JSON.parse(JSON.stringify(item)));
+        });
+        var roll = createRoll(template.name, nodes);
+        roll.icon = template.icon;
+        return roll;
+    });
+    return workspace({version: 2, activeRollId: rolls[0].id, rolls: rolls});
 }
 
 function searchWorkspace(rolls, query) {
@@ -237,7 +246,7 @@ function searchWorkspace(rolls, query) {
         roll.nodes.forEach(function(n) {
             ancestors.length = n.depth;
             if (n.text.toLocaleLowerCase().indexOf(needle) >= 0)
-                hits.push({rollId: roll.id, nodeId: n.id, text: n.text, rollName: roll.memopadDate ? "Today's Memorandom · " + roll.memopadDate : roll.name,
+                hits.push({rollId: roll.id, nodeId: n.id, text: n.text, rollName: roll.memopadDate ? "Today's Memo · " + roll.memopadDate : roll.name,
                     path: ancestors.join(" / "), memopadDate: roll.memopadDate || "", archived: !!roll.archived});
             ancestors[n.depth] = n.text;
         });
@@ -255,18 +264,35 @@ function markdownNodes(nodes, base) {
     return nodes.map(function(n) {
         var prefix = "  ".repeat(n.depth - (base || 0));
         var lines = n.text.split("\n");
-        return prefix + "- " + lines[0] + lines.slice(1).map(function(line) { return "\n" + prefix + "  " + line.replace(/\\/g, "\\\\").replace(/^( *)([-+*]|\d+[.)])(?= |$)/, "$1\\$2"); }).join("");
+        var value = prefix + "- " + lines[0] + lines.slice(1).map(function(line) { return "\n" + prefix + "  " + line.replace(/\\/g, "\\\\").replace(/^( *)([-+*]|\d+[.)])(?= |$)/, "$1\\$2"); }).join("");
+        if (n.attachment) {
+            var body = attachmentMarkdown(n.attachment), token;
+            do { token = node("", 0).id; } while (body.indexOf(token) >= 0);
+            var block = "<!-- flolinr-attachment:" + encodeURIComponent(JSON.stringify({attachment: n.attachment, end: token})) + " -->\n" + body + "\n<!-- flolinr-end:" + token + " -->";
+            value += "\n" + block.split("\n").map(function(line) { return prefix + "  " + line; }).join("\n");
+        }
+        return value;
     }).join("\n");
 }
 function exportMarkdown(roll) {
     return "# " + roll.name.replace(/[\r\n]/g, " ") + "\n\n" + markdownNodes(roll.nodes, 0) + "\n";
 }
 function importMarkdown(text, fallbackName) {
-    if (typeof text !== "string" || text.length > 2000000) throw new Error("Markdown exceeds 2 MB");
+    if (typeof text !== "string" || text.length > 32000000) throw new Error("Markdown exceeds 32 MB");
     var lines = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n");
     if (lines[lines.length - 1] === "") lines.pop();
-    var name = fallbackName || "Imported Roll", result = [], titleSeen = false;
+    var name = fallbackName || "Imported Roll", result = [], titleSeen = false, skipAttachment = "";
     lines.forEach(function(line) {
+        if (skipAttachment) { if (line.trim() === "<!-- flolinr-end:" + skipAttachment + " -->") skipAttachment = ""; return; }
+        var metadata = /^\s*<!-- flolinr-attachment:(\S+) -->$/.exec(line);
+        if (metadata && result.length) {
+            var payload = JSON.parse(decodeURIComponent(metadata[1]));
+            validateAttachment(payload.attachment);
+            if (payload.end !== undefined && !/^[a-z0-9]+$/.test(payload.end)) throw new Error("Invalid attachment boundary");
+            result[result.length - 1].attachment = payload.attachment;
+            skipAttachment = payload.end || "";
+            return;
+        }
         if (!titleSeen && !result.length && /^# /.test(line)) { name = line.slice(2).trim() || name; titleSeen = true; return; }
         var match = /^( *)(?:[-+*]|\d+[.)])(?: (.*)|$)/.exec(line);
         if (match) {
@@ -278,6 +304,7 @@ function importMarkdown(text, fallbackName) {
             result[result.length - 1].text += "\n" + line.slice((result[result.length - 1].depth + 1) * 2).replace(/^( *)\\([-+*]|\d+[.)])(?= |$)/, "$1$2").replace(/\\\\/g, "\\");
         } else if (line.trim()) result.push(node(line, 0));
     });
+    if (skipAttachment) throw new Error("Incomplete attachment block");
     return createRoll(name, result);
 }
 function branchSnapshot(nodes, id) {
@@ -288,7 +315,9 @@ function branchSnapshot(nodes, id) {
 function applyBranch(nodes, id, before, replacement) {
     var i = indexOf(nodes, id);
     if (i < 0 || branchSnapshot(nodes, id) !== before) throw new Error("The branch changed. Generate a new preview.");
+    if (JSON.parse(before).some(function(n) { return !!n.attachment; })) throw new Error("Protected attachments require a new AI preview");
     var parsed = importMarkdown(replacement, "AI preview").nodes;
+    if (parsed.some(function(n) { return !!n.attachment; })) throw new Error("AI cannot create attachments");
     if (!parsed.length || parsed.filter(function(n) { return n.depth === 0; }).length !== 1) throw new Error("AI preview must contain one root bullet and its children");
     var depth = nodes[i].depth;
     parsed.forEach(function(n) { n.depth += depth; });
@@ -303,10 +332,13 @@ function applyBranch(nodes, id, before, replacement) {
 function scopeSnapshot(nodes, zoom) {
     return zoom ? branchSnapshot(nodes, zoom) : JSON.stringify(nodes);
 }
-function applyScope(nodes, zoom, before, replacement) {
+function applyScope(nodes, zoom, before, replacement, protection) {
     if (scopeSnapshot(nodes, zoom) !== before) throw new Error("The displayed outline changed. Generate a new preview.");
+    if (protection && protection.items.length) return applyProtectedScope(nodes, zoom, replacement, protection);
+    if (JSON.parse(before).some(function(n) { return !!n.attachment; })) throw new Error("Protected attachments require a new AI preview");
     if (zoom) return applyBranch(nodes, zoom, before, replacement);
     var parsed = importMarkdown(replacement, "AI preview").nodes;
+    if (parsed.some(function(n) { return !!n.attachment; })) throw new Error("AI cannot create attachments");
     if (!parsed.length) throw new Error("AI preview must contain at least one bullet item");
     validate({version: 1, nodes: parsed});
     return parsed;
@@ -316,8 +348,145 @@ function importOutline(items, name) {
     if (!Array.isArray(items)) throw new Error("Invalid imported outline");
     var nodes = items.map(function(item) {
         if (!item || typeof item.text !== "string" || !Number.isInteger(item.depth)) throw new Error("Invalid imported item");
-        return node(item.text, item.depth);
+        var decoded = decodeInterchangeText(item.text), value = node(decoded.text, item.depth);
+        if (decoded.attachment) value.attachment = decoded.attachment;
+        return value;
     });
     validate({version: 1, nodes: nodes});
     return createRoll(name || "Imported Roll", nodes);
+}
+
+// Embedded data stays in the workspace, independently of the source file.
+function validateAttachment(a) {
+    if (!a || ["image", "file", "text", "code"].indexOf(a.kind) < 0 ||
+        typeof a.name !== "string" || !a.name || a.name.length > 255 || /[\r\n]/.test(a.name) ||
+        typeof a.mime !== "string" || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(a.mime) ||
+        typeof a.content !== "string" || a.content.length > 2800000 ||
+        typeof a.language !== "string" || !/^[a-zA-Z0-9_+-]{0,32}$/.test(a.language)) throw new Error("Invalid attachment");
+    if (a.kind === "image" && ["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"].indexOf(a.mime) < 0)
+        throw new Error("Unsupported image preview");
+    if ((a.kind === "image" || a.kind === "file") &&
+        ((a.kind === "image" && !a.content) || a.content.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(a.content))) throw new Error("Invalid attachment encoding");
+    var bytes = a.kind === "image" || a.kind === "file" ? a.content.length / 4 * 3 - (a.content.endsWith("==") ? 2 : a.content.endsWith("=") ? 1 : 0)
+        : encodeURIComponent(a.content).replace(/%[0-9A-F]{2}/g, "x").length;
+    if (bytes > 2000000) throw new Error("Inserted files must be 2 MB or smaller");
+    return a;
+}
+function insertAttachment(nodes, parentId, attachment) {
+    validateAttachment(attachment);
+    var p = indexOf(nodes, parentId);
+    if (parentId && p < 0) throw new Error("The insertion target changed");
+    var value = node("", p < 0 ? 0 : nodes[p].depth + 1);
+    value.attachment = JSON.parse(JSON.stringify(attachment));
+    if (p >= 0) nodes[p].collapsed = false;
+    nodes.splice(p < 0 ? nodes.length : endOf(nodes, p), 0, value);
+    return value.id;
+}
+function replaceWithAttachment(nodes, id, attachment, expectedText) {
+    validateAttachment(attachment);
+    var i = indexOf(nodes, id);
+    if (i < 0 || nodes[i].attachment || nodes[i].text !== expectedText || !/^\/[a-z]*$/i.test(nodes[i].text.trim()))
+        throw new Error("The insertion target changed");
+    nodes[i].text = "";
+    nodes[i].attachment = JSON.parse(JSON.stringify(attachment));
+    nodes[i].collapsed = false;
+    touch([nodes[i]]);
+    return id;
+}
+function attachmentMarkdown(a) {
+    validateAttachment(a);
+    var name = a.name.replace(/[\\\[\]()*_`<>]/g, "\\$&");
+    if (a.kind === "image" || a.kind === "file")
+        return (a.kind === "image" ? "!" : "") + "[" + name + "](data:" + a.mime + ";base64," + a.content + ")";
+    var fence = "```";
+    while (a.content.indexOf(fence) >= 0) fence += "`";
+    return "**" + name + "**\n\n" + fence + (a.language || "text") + "\n" + a.content + (a.content.endsWith("\n") ? "" : "\n") + fence;
+}
+function interchangeText(n) {
+    return n.text + (n.attachment ? "\n<!-- flolinr-attachment:" + encodeURIComponent(JSON.stringify({attachment: n.attachment})) + " -->" : "");
+}
+function decodeInterchangeText(text) {
+    var match = /\n<!-- flolinr-attachment:(\S+) -->$/.exec(text);
+    if (!match) return {text: text};
+    var payload = JSON.parse(decodeURIComponent(match[1]));
+    return {text: text.slice(0, match.index), attachment: validateAttachment(payload.attachment)};
+}
+function createAiScope(nodes, zoom) {
+    var snapshot = scopeSnapshot(nodes, zoom), scope = JSON.parse(snapshot), items = [], nonce = node("", 0).id;
+    var base = scope.length ? scope[0].depth : 0;
+    scope.forEach(function(n, i) {
+        if (!n.attachment) return;
+        var token = "[FLOLINR_PROTECTED_" + nonce + "_" + i + "]";
+        items.push({token: token, node: JSON.parse(JSON.stringify(n))});
+        n.text = token;
+        delete n.attachment;
+    });
+    return {snapshot: snapshot, text: markdownNodes(scope, base), base: base, items: items};
+}
+function verifyProtectedTokens(text, protection) {
+    var expected = protection.items.map(function(item) { return item.token; });
+    var found = text.match(/\[FLOLINR_PROTECTED_[a-z0-9_]+\]/g) || [];
+    if (found.length !== expected.length || expected.some(function(token) { return found.filter(function(s) { return s === token; }).length !== 1; }))
+        throw new Error("AI changed a protected attachment marker. Generate a new preview.");
+}
+function applyProtectedScope(nodes, zoom, replacement, protection) {
+    verifyProtectedTokens(replacement, protection);
+    var parsed = importMarkdown(replacement, "AI preview").nodes;
+    if (!parsed.length || (zoom && parsed.filter(function(n) { return n.depth === 0; }).length !== 1)) throw new Error("Invalid AI outline");
+    parsed.forEach(function(n) { if (n.attachment) throw new Error("AI cannot create attachments"); });
+    var base = zoom ? nodes[indexOf(nodes, zoom)].depth : 0;
+    protection.items.forEach(function(item) {
+        var matches = parsed.filter(function(n) { return n.text === item.token; });
+        if (matches.length !== 1 || matches[0].depth + base !== item.node.depth)
+            throw new Error("AI changed a protected attachment's indentation. Generate a new preview.");
+        var i = parsed.indexOf(matches[0]);
+        parsed[i] = JSON.parse(JSON.stringify(item.node));
+        parsed[i].depth -= base;
+    });
+    var start = zoom ? indexOf(nodes, zoom) : 0, end = zoom ? endOf(nodes, start) : nodes.length;
+    parsed.forEach(function(n) { n.depth += base; });
+    if (zoom) { parsed[0].id = nodes[start].id; parsed[0].createdAt = nodes[start].createdAt; }
+    var next = nodes.slice(0, start).concat(parsed, nodes.slice(end));
+    validate({version: 1, nodes: next});
+    return next;
+}
+function restoreMarkdownAttachments(text, protection) {
+    verifyProtectedTokens(text, protection);
+    protection.items.forEach(function(item) {
+        var lines = text.split("\n"), matches = [];
+        lines.forEach(function(line, i) { if (line.trim() === item.token) matches.push(i); });
+        if (matches.length !== 1) throw new Error("AI changed a protected attachment marker. Generate a new preview.");
+        lines[matches[0]] = attachmentMarkdown(item.node.attachment);
+        text = lines.join("\n");
+    });
+    return text;
+}
+
+// Prefer filename extensions; pasted content is inspected without executing it.
+function detectAttachmentFormat(name, content) {
+    var extension = (name.trim().toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1];
+    var formats = {html:"html",htm:"html",css:"css",json:"json",md:"markdown",markdown:"markdown",txt:"text",text:"text",js:"javascript",mjs:"javascript",ts:"typescript",tsx:"tsx",jsx:"jsx",py:"python",sh:"sh",bash:"bash",yaml:"yaml",yml:"yaml",xml:"xml",svg:"xml",toml:"toml",sql:"sql",c:"c",h:"c",cpp:"cpp",rs:"rust",go:"go",java:"java",rb:"ruby",qml:"qml",csv:"csv",log:"text"};
+    if (formats[extension]) return formats[extension];
+    var text = content.trim();
+    if (/^[\[{]/.test(text)) { try { JSON.parse(text); return "json"; } catch (e) {} }
+    if (/^<\?xml\b/i.test(text) || /^<svg\b/i.test(text)) return "xml";
+    if (/^<!doctype html\b/i.test(text) || /<\/?(?:html|head|body|div|span|p|script|style|section|h[1-6])\b/i.test(text)) return "html";
+    if (/^[^{}]+\{\s*[\w-]+\s*:[^{}]+[;}]/.test(text)) return "css";
+    if (/^(?:#{1,6}\s|```|~~~|[-*+]\s|\d+\.\s|>\s)/m.test(text) || /\[[^\]]+\]\([^)]+\)/.test(text)) return "markdown";
+    if (/^(?:def |class |from \w+ import |import \w+|#!.*python)/m.test(text)) return "python";
+    if (/^(?:const |let |var |function |export |import .* from )/m.test(text)) return "javascript";
+    return "text";
+}
+
+// Move within the same sidebar section; daily notes keep their workspace slots.
+function reorderRolls(rolls, sourceId, targetId, after) {
+    var source = indexOf(rolls, sourceId), target = indexOf(rolls, targetId);
+    if (source < 0 || target < 0 || source === target) return null;
+    if (rolls[source].memopadDate || rolls[target].memopadDate || !!rolls[source].archived !== !!rolls[target].archived) return null;
+    var order = rolls.filter(function(r) { return !r.memopadDate && !!r.archived === !!rolls[source].archived; });
+    var moved = order.splice(indexOf(order, sourceId), 1)[0];
+    order.splice(indexOf(order, targetId) + (after ? 1 : 0), 0, moved);
+    var next = 0;
+    var result = rolls.map(function(r) { return !r.memopadDate && !!r.archived === !!moved.archived ? order[next++] : r; });
+    return result.every(function(r, i) { return r === rolls[i]; }) ? null : result;
 }

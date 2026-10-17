@@ -1,8 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const m=vm.createContext({});
-vm.runInContext(fs.readFileSync(path.join(__dirname,'../Model.js'),'utf8'),m);
+const m = require('./load-model.cjs')();
 const texts=nodes=>JSON.stringify(nodes.map(n=>[n.text,n.depth]));
 test('global search includes collapsed, archived and dated notes with jump IDs',()=>{
  const a=m.createRoll('A',[m.node('parent',0),m.node('Needle child',1)]); a.nodes[0].collapsed=true;

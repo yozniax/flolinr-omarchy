@@ -3,12 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const catalog = {};
+const european = vm.createContext({});
+vm.runInContext(fs.readFileSync(path.join(__dirname, "../EuropeanTranslations.js"), "utf8"), european);
+const catalog = {European: european};
 vm.createContext(catalog);
-vm.runInContext(fs.readFileSync(path.join(__dirname, '../Translations.js'), 'utf8').replace('.pragma library', ''), catalog);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../Translations.js'), 'utf8').replace('.pragma library', '').replace(/^\.import.*$/m, ''), catalog);
 
-test('all nine locales have complete catalogs and matching placeholders', () => {
- assert.equal(catalog.languages.length, 9);
+test('all thirteen locales have complete catalogs and matching placeholders', () => {
+ assert.equal(catalog.languages.length, 13);
  assert.ok(Object.keys(catalog.catalog).length >= 220);
  const placeholders = text => [...text.matchAll(/\{\d+\}/g)].map(m => m[0]).sort();
  for (const [source, values] of Object.entries(catalog.catalog)) {
@@ -20,7 +22,7 @@ test('all nine locales have complete catalogs and matching placeholders', () => 
  }
 });
 test('legacy and unsupported locale settings fall back to English', () => {
- for (const value of [undefined, null, '', 'de', 3]) assert.equal(catalog.normalize(value), 'en');
+ for (const value of [undefined, null, '', 'xx', 3]) assert.equal(catalog.normalize(value), 'en');
  assert.equal(catalog.translate('en', 'Node color'), 'Item color');
  assert.equal(catalog.translate('en', 'Connection test'), 'Test connection');
  assert.equal(catalog.translate('en', 'Settings · AI connections'), 'Settings');
@@ -51,4 +53,20 @@ test('shortcut help descriptions are translated without changing keybindings', (
   assert.ok(catalog.catalog[section.title], section.title);
   for (const row of section.rows) assert.ok(catalog.catalog[row[1]], row[1]);
  }
+});
+
+test('additional catalogs are complete and language ordering cannot change translations',()=>{
+ const codes=Array.from(catalog.languages,x=>x.code);
+ assert.deepEqual(codes,['en','zh-CN','zh-TW','da','fr','de','it','ja','ko','pl','pt','ru','es']);
+ const placeholders=text=>Array.from(text.matchAll(/\{\d+\}/g),m=>m[0]).sort();
+ for(const code of ['da','de','ru','pl']) {
+  for(const source of Object.keys(catalog.catalog)) {
+   const text=european.catalog[code][source];assert.ok(text&&text.trim(),code+': '+source);
+   assert.deepEqual(placeholders(text),placeholders(source),source);
+   assert.equal(catalog.translate(code,source),text);
+  }
+ }
+ assert.equal(catalog.translate('ja','Saved'),'保存済み');
+ assert.equal(catalog.translate('de','Saved'),'Gespeichert');
+ assert.equal(catalog.translate('ru','Saved'),'Сохранено');
 });

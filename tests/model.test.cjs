@@ -1,9 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const fs = require('node:fs');
-const m = vm.createContext({});
-vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../Model.js'), 'utf8'), m);
+const m = require('./load-model.cjs')();
 const outline = () => [ ['a',0], ['b',1], ['c',2], ['d',1], ['e',0] ].map(([id,depth]) => ({id,depth,text:id,collapsed:false}));
 const shape = n => n.map(x=>`${x.id}:${x.depth}`).join(',');
 test('outdent a branch without adopting remaining siblings', () => {
@@ -104,7 +101,7 @@ test('timestamps round-trip and invalid dates are rejected', () => {
 });
 test('Roll emoji icons persist and older Rolls remain readable', () => {
     const roll=m.createRoll('Ideas',[]);
-    assert.equal(roll.icon,'📄');
+    assert.equal(roll.icon,'🧾');
     roll.icon='🌱';
     const data=JSON.parse(JSON.stringify({version:2,activeRollId:roll.id,rolls:[roll]}));
     assert.equal(m.workspace(data).rolls[0].icon,'🌱');
@@ -291,4 +288,40 @@ test('Enter on the zoom heading inserts first child in the same zoom, even if or
  assert.equal(n[1].id,id); assert.equal(n[1].depth,1);
  assert.equal(m.visible(n,'a','')[0].id,id);
  m.validate({version:1,nodes:n});
+});
+
+test('Roll reordering persists while daily notes and other sections keep their slots',()=>{
+ const rolls=[m.createRoll('A',[]),m.createRoll('B',[]),m.createRoll('C',[])];
+ const daily=m.ensureMemopad(rolls,'2026-10-17');
+ const archived=m.createRoll('Archived',[]);archived.archived=true;rolls.splice(1,0,daily);rolls.pop();rolls.push(archived);
+ const [a,,b,c]=rolls;
+ const moved=m.reorderRolls(rolls,a.id,c.id,true);
+ assert.deepEqual(Array.from(moved,r=>r.id),[b.id,daily.id,c.id,a.id,archived.id]);
+ const loaded=m.decodeWorkspace(m.encodeWorkspace(a.id,moved)).workspace;
+ assert.deepEqual(Array.from(loaded.rolls,r=>r.id),Array.from(moved,r=>r.id));
+ assert.equal(m.reorderRolls(rolls,a.id,daily.id,false),null);
+ assert.equal(m.reorderRolls(rolls,a.id,archived.id,false),null);
+ assert.equal(m.reorderRolls(rolls,a.id,a.id,false),null);
+ assert.equal(rolls[0].id,a.id);
+});
+
+test('fresh workspaces include five independent English manual Rolls with embedded examples',()=>{
+ const first=m.initialWorkspace(),second=m.initialWorkspace();
+ assert.equal(first.rolls.length,5);
+ assert.equal(first.activeRollId,first.rolls[0].id);
+ assert.deepEqual(Array.from(first.rolls,r=>r.name),[
+  '01 Getting Started','02 Outline Skills',
+  '03 Daily Workflow','04 Files & Markdown','05 AI Studio']);
+ const oldIds=new Set(first.rolls.flatMap(r=>[r.id,...r.nodes.map(n=>n.id)]));
+ assert.ok(second.rolls.every(r=>!oldIds.has(r.id)&&r.nodes.every(n=>!oldIds.has(n.id))));
+ assert.ok(first.rolls.some(r=>r.nodes.some(n=>n.collapsed)));
+ const embedded=first.rolls.flatMap(r=>r.nodes).filter(n=>n.attachment);
+ assert.equal(embedded.length,3);
+ embedded[0].attachment.content='User edit';
+ assert.notEqual(second.rolls[3].nodes.find(n=>n.attachment).attachment.content,'User edit');
+ first.rolls.shift();first.activeRollId=first.rolls[0].id;
+ first.rolls[0].name='My renamed guide';
+ const loaded=m.decodeWorkspace(m.encodeWorkspace(first.activeRollId,first.rolls));
+ assert.equal(loaded.workspace.rolls.length,4);assert.equal(loaded.needsSave,false);
+ assert.equal(loaded.workspace.rolls[0].name,'My renamed guide');
 });

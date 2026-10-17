@@ -1,4 +1,5 @@
 """OPML 2.0 and indentation-based plaintext outline exchange."""
+import base64
 import re
 import xml.etree.ElementTree as ET
 
@@ -99,7 +100,11 @@ def import_plaintext(text, fallback):
             levels.pop()
         if width > levels[-1]:
             levels.append(width)
-        items.append({'text': line[len(indentation):], 'depth': len(levels) - 1})
+        value = line[len(indentation):]
+        encoded = re.fullmatch(r'<!-- flolinr-item:([A-Za-z0-9+/=]+) -->', value)
+        if encoded:
+            value = base64.b64decode(encoded[1], validate=True).decode('utf-8')
+        items.append({'text': value, 'depth': len(levels) - 1})
     return {'name': fallback, 'items': validate_items(items)}
 
 
@@ -107,6 +112,10 @@ def export_plaintext(roll):
     items = validate_items(roll['nodes'])
     lines = []
     for item in items:
+        if '<!-- flolinr-attachment:' in item['text'] or item['text'].startswith('<!-- flolinr-item:'):
+            encoded = base64.b64encode(item['text'].encode('utf-8')).decode('ascii')
+            lines.append('  ' * item['depth'] + '<!-- flolinr-item:' + encoded + ' -->')
+            continue
         # Plaintext has one item per line; multiline items become separate lines.
         lines.extend('  ' * item['depth'] + line for line in item['text'].split('\n'))
     return '\n'.join(lines) + ('\n' if lines else '')

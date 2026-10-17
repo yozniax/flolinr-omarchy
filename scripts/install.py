@@ -11,7 +11,8 @@ import tempfile
 
 SOURCE = Path(__file__).resolve().parent.parent
 FILES = [
-    'qmldir', 'I18n.qml', 'Translations.js',
+    'ModalSection.qml', 'Templates.js', 'TemplateManager.qml', 'CommandActions.js', 'CommandDialog.qml', 'StarterContent.js', 'RollEntry.qml', 'SlashMenu.qml', 'attachments.py', 'AttachmentView.qml', 'AttachmentDialog.qml',
+    'qmldir', 'I18n.qml', 'Translations.js', 'EuropeanTranslations.js',
     'AiSettings.js', 'ai_backend.py',
     'FileTransfer.qml', 'interchange.py', 'CompactDialog.qml', 'ActionLink.qml', 'BarWidget.qml', 'Keybindings.js', 'KeyboardSettings.qml',
     'FlolinrIcon.qml', 'flolinr.svg', 'AppSettings.qml', 'QuickCapture.qml', 'FeaturePanel.qml', 'FeatureController.qml', 'bridge.py',

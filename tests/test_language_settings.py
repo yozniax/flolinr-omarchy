@@ -59,7 +59,7 @@ ShellRoot {
                 if next_language:
                     self.assertIn('PASS_SAVED', output)
             current = 'en'
-            for language in ('en', 'ja', 'zh-CN', 'zh-TW', 'ko', 'es', 'pt', 'fr', 'it'):
+            for language in ('en', 'ja', 'zh-CN', 'zh-TW', 'ko', 'es', 'pt', 'fr', 'it', 'da', 'de', 'ru', 'pl'):
                 run(current, language)
                 saved = json.loads(settings_path.read_text())
                 self.assertEqual(saved['language'], language)
