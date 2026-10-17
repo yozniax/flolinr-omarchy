@@ -2688,6 +2688,18 @@ Object.assign(catalog, {
   "Connection details": ["接続の詳細", "连接详情", "連線詳細資料", "연결 세부 정보", "Detalles de conexión", "Detalhes da ligação", "Détails de la connexion", "Dettagli connessione"]
 });
 
+Object.assign(catalog, {
+  "Quick note": ["クイックメモ", "快速便笺", "快速便箋", "빠른 메모", "Nota rápida", "Nota rápida", "Note rapide", "Nota rapida"],
+  "Outline": ["アウトライン", "大纲", "大綱", "아웃라인", "Esquema", "Estrutura", "Plan", "Struttura"],
+  "Checklist": ["チェックリスト", "清单", "清單", "체크리스트", "Lista de tareas", "Lista de tarefas", "Liste de tâches", "Lista di controllo"],
+  "Add outline items, one per line…": ["項目を1行に1つ入力…", "每行输入一个大纲条目…", "每行輸入一個大綱項目…", "한 줄에 항목 하나씩 입력…", "Añade un elemento por línea…", "Adicione um item por linha…", "Ajoutez un élément par ligne…", "Aggiungi un elemento per riga…"],
+  "Add checklist items, one per line…": ["チェック項目を1行に1つ入力…", "每行输入一个清单项目…", "每行輸入一個清單項目…", "한 줄에 체크 항목 하나씩 입력…", "Añade una tarea por línea…", "Adicione uma tarefa por linha…", "Ajoutez une tâche par ligne…", "Aggiungi un'attività per riga…"],
+  "Tab indents · Shift+Tab outdents · nest as needed": ["Tabで字下げ · Shift+Tabで戻す · 階層は自由", "Tab 缩进 · Shift+Tab 减少缩进 · 可按需嵌套", "Tab 縮排 · Shift+Tab 減少縮排 · 可按需巢狀", "Tab 들여쓰기 · Shift+Tab 내어쓰기 · 필요한 만큼 중첩", "Tab sangra · Shift+Tab reduce la sangría · anida según necesites", "Tab indenta · Shift+Tab reduz a indentação · aninhe conforme necessário", "Tab indente · Shift+Tab désindente · imbriquez selon vos besoins", "Tab indenta · Shift+Tab riduce il rientro · nidifica secondo necessità"],
+  "Enter saves · Esc closes": ["Enterで保存 · Escで閉じる", "Enter 保存 · Esc 关闭", "Enter 儲存 · Esc 關閉", "Enter 저장 · Esc 닫기", "Enter guarda · Esc cierra", "Enter guarda · Esc fecha", "Entrée enregistre · Échap ferme", "Invio salva · Esc chiude"],
+  "Ctrl+Enter saves": ["Ctrl+Enterで保存", "Ctrl+Enter 保存", "Ctrl+Enter 儲存", "Ctrl+Enter 저장", "Ctrl+Enter guarda", "Ctrl+Enter guarda", "Ctrl+Entrée enregistre", "Ctrl+Invio salva"],
+  "Add at least one item": ["項目を1つ以上入力してください", "请至少添加一个条目", "請至少新增一個項目", "항목을 하나 이상 추가하세요", "Añade al menos un elemento", "Adicione pelo menos um item", "Ajoutez au moins un élément", "Aggiungi almeno un elemento"]
+});
+
 function translate(code, source, args) {
     if (typeof source !== "string") return "";
     var normalized = normalize(code);

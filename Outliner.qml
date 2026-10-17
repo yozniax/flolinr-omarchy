@@ -27,22 +27,39 @@ Item {
     property string searchQuery: ""
     readonly property var searchHits: { var revision = root.revision; return Model.searchWorkspace(rolls, searchQuery); }
     property bool captureSaving: false
-    property string captureNodeId: ""
+    property var captureNodeIds: []
     property string captureDay: ""
-    function captureLine(text) {
+    property string captureTimestamp: ""
+    function captureLine(payload) {
         if (!ready || captureSaving) return;
         try {
+            var mode = typeof payload === "string" ? "memo" : payload.mode;
+            var captureText = typeof payload === "string" ? payload : String(payload.text || "");
+            var entries = mode === "memo" ? [{text: captureText.trim(), depth: 0}]
+                : Model.parseCaptureOutline(captureText, mode === "checklist");
+            entries = entries.filter(function(entry) { return !!entry.text; });
+            if (!entries.length) throw new Error("Add at least one item");
             commitRoll();
             var active = activeRollId, before = JSON.stringify(nodes);
-            if (captureNodeId) {
-                var target = Model.ensureMemopad(rolls, captureDay), ni = Model.indexOf(target.nodes, captureNodeId);
-                if (ni < 0) throw new Error(I18n.t("Pending note changed. Reopen quick capture to retry."));
-                target.nodes[ni].text = text.trim(); Model.touch([target.nodes[ni]]);
-            } else {
+            if (!captureNodeIds.length) {
                 captureDay = todayKey;
-                captureNodeId = Model.appendCapture(rolls, captureDay, text);
+                var capturedAt = new Date();
+                captureTimestamp = String(capturedAt.getHours()).padStart(2, "0") + ":" + String(capturedAt.getMinutes()).padStart(2, "0");
             }
-            if (isMemopad && rolls[Model.indexOf(rolls, active)].memopadDate === todayKey) {
+            var target = Model.ensureMemopad(rolls, captureDay);
+            if (captureNodeIds.length) {
+                var pendingIds = captureNodeIds;
+                target.nodes = target.nodes.filter(function(node) { return pendingIds.indexOf(node.id) < 0; });
+            }
+            captureNodeIds = [];
+            var timestampNode = Model.node(captureTimestamp, 0);
+            target.nodes.push(timestampNode);
+            captureNodeIds.push(timestampNode.id);
+            entries.forEach(function(entry) {
+                var item = Model.node(entry.text, entry.depth + 1);
+                target.nodes.push(item); captureNodeIds.push(item.id);
+            });
+            if (isMemopad && rolls[Model.indexOf(rolls, active)].memopadDate === captureDay) {
                 undoStack = undoStack.concat([before]).slice(-100); redoStack = [];
             }
             rolls = rolls.slice(); changed(); refresh();
@@ -53,7 +70,7 @@ Item {
     QuickCapture {
         id: capture
         ready: root.ready
-        onSubmitted: function(text) { root.captureLine(text); }
+        onSubmitted: function(payload) { root.captureLine(payload); }
         onDismissed: if (!root.closingFromHost && !window.visible) root.requestClose()
     }
     property var shell: null
@@ -540,7 +557,7 @@ Item {
         onWorkspaceLoaded: function(workspace, needsSave) { root.applyWorkspace(workspace, needsSave); }
         onSaved: {
             root.dirty = false; root.status = "Saved";
-            if (root.captureSaving) { root.captureSaving = false; root.captureNodeId = ""; capture.saved(); }
+            if (root.captureSaving) { root.captureSaving = false; root.captureNodeIds = []; root.captureDay = ""; root.captureTimestamp = ""; capture.saved(); }
         }
         onFailed: function(message) {
             root.status = message;
@@ -913,7 +930,7 @@ Item {
                             }
                             Label {
                                 objectName: "brandVersion"
-                                text: root.manifest ? root.manifest.version : "0.23.0"
+                                text: root.manifest ? root.manifest.version : "0.24.0"
                                 color: Commons.Color.foreground
                                 opacity: 0.4
                                 font.pixelSize: 9

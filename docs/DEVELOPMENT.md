@@ -122,6 +122,12 @@ or malformed data. This is conflict detection, not a distributed merge protocol.
 
 `QuickCapture.qml` is a second lightweight window routed through the SAME panel and
 writer using `{ "mode": "capture" }`. It does not create another storage owner.
+Each submission creates an `HH:MM` timestamp parent in the day's memo and stores
+the captured content beneath it. Outline and Checklist parse multiline drafts with
+arbitrarily deep nesting. Invalid depth jumps are clamped to
+the next valid child level to preserve the workspace outline invariant. Pending IDs make a failed save
+retry replace the pending capture instead of duplicating it. The compact window
+uses the shared `FlolinrIcon.qml` mark and wordmark.
 `FeatureController.qml` uses `bridge.py` for Markdown files, new-location copies,
 and an explicitly requested stdin/stdout LLM CLI. `FeaturePanel.qml` owns previews
 and applies AI output only on request with a branch snapshot check and Undo.

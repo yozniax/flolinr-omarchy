@@ -260,6 +260,23 @@ function appendCapture(rolls, day, text) {
     if (last && last.depth === 0 && last.text === "") { last.text = value; touch([last]); return last.id; }
     var item = node(value, 0); roll.nodes.push(item); return item.id;
 }
+function parseCaptureOutline(text, checklist) {
+    if (typeof text !== "string") throw new Error("Add at least one item");
+    var result = [], previousDepth = -1;
+    text.split(/\r?\n/).forEach(function(line) {
+        if (!line.trim()) return;
+        var indent = (line.match(/^[\t ]*/) || [""])[0];
+        var requestedDepth = (indent.match(/\t/g) || []).length + Math.floor(indent.replace(/\t/g, "").length / 2);
+        var value = line.slice(indent.length).trim();
+        if (!value) return;
+        var depth = previousDepth < 0 ? 0 : Math.min(requestedDepth, previousDepth + 1);
+        previousDepth = depth;
+        if (checklist && !/^\[[ xX]\]\s/.test(value)) value = "[ ] " + value;
+        result.push({text: value, depth: depth});
+    });
+    if (!result.length) throw new Error("Add at least one item");
+    return result;
+}
 function markdownNodes(nodes, base) {
     return nodes.map(function(n) {
         var prefix = "  ".repeat(n.depth - (base || 0));
