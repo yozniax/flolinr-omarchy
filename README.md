@@ -7,6 +7,12 @@ A quiet outliner for Omarchy — for ideas, daily notes, and whatever comes next
 A keyboard-first outliner for Omarchy. Organize ideas into nested items, zoom into a branch, keep a dated daily memo, and search across your workspace.
 <img width="1070" height="481" alt="screenshot-2026-10-17_13-46-12" src="https://github.com/user-attachments/assets/d8121b28-71ae-4061-9b93-6e3855bb8d03" />
 
+## Requirements
+
+- Omarchy Quattro with Quickshell plugin support.
+- Python 3 for file import/export, embedded files, workspace relocation, and AI helpers. The Python helpers use the standard library; no pip packages are required.
+- Optional AI: install and authenticate your chosen CLI (Codex, Claude Code, or a custom CLI), or configure an API provider in Settings. API-key storage requires `secret-tool` from `libsecret` and an unlocked Secret Service keyring. Guided CLI login uses an installed foot, kitty, or alacritty terminal.
+
 ## Install
 
 ```sh
@@ -114,6 +120,8 @@ An empty value disables that shortcut. See [`keybindings.example.json`](keybindi
 Settings lets you choose the interface language, workspace file, templates, and optional AI connections. Flolinr supports English, Chinese (Simplified and Traditional), Danish, French, German, Italian, Japanese, Korean, Polish, Portuguese, Russian, and Spanish.
 
 By default, your workspace is stored in `~/.local/share/flolinr/outline.json`. Settings and shortcut overrides are stored in `~/.config/flolinr/`. You can choose another workspace file in Settings, including a file in a synced folder. Notes and settings are kept outside the plugin directory and remain when you remove Flolinr. Sync services and conflict-free multi-device editing are not built in.
+
+Flolinr runs with your normal user permissions inside the Omarchy shell and launches local helpers for file operations and optional AI commands. AI actions send the selected Roll or zoomed branch to the configured provider; connection tests send a short test prompt. API keys are stored in the desktop keyring, outside the workspace. CLI authentication is managed by the CLI. Installation does not add global keybindings or overwrite Hyprland configuration; the Quick Capture binding above is an optional manual setup step.
 
 ## Feedback
 
