@@ -29,6 +29,14 @@ Click the Flolinr icon in the Omarchy bar, or open the main window from a termin
 omarchy-shell shell summon yozniax.flolinr '{}'
 ```
 
+To open the editor as a centered floating window, add this optional rule to `~/.config/hypr/hyprland.lua`:
+
+```lua
+o.window({ title = "^Flolinr$" }, { float = true, center = true })
+```
+
+Close and reopen Flolinr after applying the rule. Window placement is controlled by Hyprland; installing the plugin does not change your desktop configuration.
+
 Flolinr opens with five starter Rolls that introduce its main workflows. Create your own Roll with **Ctrl+Shift+N**. Rename it with **Ctrl+Shift+R**. Drag Rolls in the sidebar to reorder them.
 
 ## Work with an outline
@@ -81,7 +89,7 @@ Search spans all Rolls and dated memos, including archived and folded content. C
 
 Import and Export support **OPML, Markdown, and plain text**. Import creates a new Roll; Export writes the current Roll. Use the Import link in the sidebar and Export in the open Roll's toolbar.
 
-From the **AI** action, summarize, expand, or reorder the current Roll or zoomed branch. **Convert to Markdown** creates a rich Markdown document that you can save as a `.md` file. Review the target scope before running an action. AI is optional: configure a local CLI or an API connection in Settings. No AI service is contacted until you run an AI action or connection test.
+From the **AI** action, summarize, expand, or reorder the current Roll or zoomed branch. **Convert to Markdown** creates a rich Markdown document that you can save as a `.md` file or copy to the clipboard with **Copy Markdown**. Review the target scope before running an action. AI is optional: configure a local CLI or an API connection in Settings. No AI service is contacted until you run an AI action or connection test.
 
 ## Keyboard shortcuts
 

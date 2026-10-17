@@ -67,6 +67,14 @@ CompactDialog {
         if (controller.busy || !controller.aiPreviewReady || controller.aiTask !== "markdown" || !preview.text.trim()) return;
         markdownPicker.open();
     }
+    function copyMarkdown() {
+        if (controller.busy || !controller.aiPreviewReady || controller.aiTask !== "markdown" || !preview.text.trim()) return;
+        var start = preview.selectionStart, end = preview.selectionEnd, cursor = preview.cursorPosition;
+        preview.selectAll();
+        preview.copy();
+        preview.select(cursor === start ? end : start, cursor === start ? start : end);
+        message.text = I18n.t("Markdown copied");
+    }
     Connections {
         target: root.controller
         function onMarkdownSaved(path) { message.text = I18n.t("Markdown saved: {0}", [path]); }
@@ -342,6 +350,13 @@ CompactDialog {
         Label { visible: root.controller.busy; text: I18n.t("Working…"); }
         RowLayout {
             ActionLink { text: I18n.t("Close"); enabled: !root.controller.busy; onClicked: root.close(); }
+            ActionLink {
+                objectName: "aiCopyMarkdown"
+                visible: root.mode === "ai" && root.controller.aiTask === "markdown"
+                text: I18n.t("Copy Markdown")
+                enabled: !root.controller.busy && root.controller.aiPreviewReady && !!preview.text.trim()
+                onClicked: root.copyMarkdown()
+            }
             ActionLink {
                 objectName: "aiPreviewAction"
                 text: root.mode === "settings" ? I18n.t("Save settings") : root.controller.aiTask === "markdown" ? I18n.t("Download .md") : I18n.t("Apply preview")

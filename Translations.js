@@ -2700,6 +2700,29 @@ Object.assign(catalog, {
   "Add at least one item": ["項目を1つ以上入力してください", "请至少添加一个条目", "請至少新增一個項目", "항목을 하나 이상 추가하세요", "Añade al menos un elemento", "Adicione pelo menos um item", "Ajoutez au moins un élément", "Aggiungi almeno un elemento"]
 });
 
+Object.assign(catalog, {
+  "Copy Markdown": [
+    "Markdownをコピー",
+    "复制 Markdown",
+    "複製 Markdown",
+    "Markdown 복사",
+    "Copiar Markdown",
+    "Copiar Markdown",
+    "Copier le Markdown",
+    "Copia Markdown"
+  ],
+  "Markdown copied": [
+    "Markdownをコピーしました",
+    "已复制 Markdown",
+    "已複製 Markdown",
+    "Markdown을 복사했습니다",
+    "Markdown copiado",
+    "Markdown copiado",
+    "Markdown copié",
+    "Markdown copiato"
+  ]
+});
+
 function translate(code, source, args) {
     if (typeof source !== "string") return "";
     var normalized = normalize(code);
