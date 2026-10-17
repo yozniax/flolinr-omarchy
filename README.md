@@ -1,5 +1,7 @@
 # Flolinr for Omarchy
 
+**Flolinr** /ˈfloʊˌlaɪnər/ · フローライナー
+
 A quiet outliner for Omarchy — for ideas, daily notes, and whatever comes next.
 
 <img width="2160" height="1350" alt="Flolinr outline editor" src="preview.png" />
