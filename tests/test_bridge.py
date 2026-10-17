@@ -14,6 +14,25 @@ spec.loader.exec_module(bridge)
 
 
 class BridgeTests(unittest.TestCase):
+    def test_ai_markdown_file_keeps_rich_content_and_does_not_touch_workspace(self):
+        text = '# Report\n\nA **summary**.\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n```python\nprint(1)\n```\n'
+        command = [sys.executable, '-c',
+                   'import sys; p=sys.stdin.read(); assert "rich Markdown document" in p; '
+                   'assert p.endswith("- Selected branch"); sys.stdout.write(' + repr(text) + ')']
+        generated = bridge.run(dict(operation='ai', command=command, task='markdown', scope='branch', text='- Selected branch'))['text']
+        self.assertEqual(generated, text.strip())
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory) / 'outline.json'
+            workspace.write_text('private workspace')
+            path = Path(directory) / '日本語 #%.md'
+            bridge.run(dict(operation='export', path=path.as_uri(), format='markdown', text=generated,
+                            overwrite=True, protectedPath=str(workspace), aiMarkdown=True))
+            self.assertEqual(path.read_text(), generated)
+            self.assertEqual(workspace.read_text(), 'private workspace')
+            with self.assertRaises(ValueError):
+                bridge.run(dict(operation='export', path=str(workspace), format='markdown', text=text,
+                                overwrite=True, protectedPath=str(workspace)))
+
     def test_markdown_export_import_and_no_clobber(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / '日本語.md')

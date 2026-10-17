@@ -1,29 +1,32 @@
-# Flolinr for Omarchy
+# Flolinr
 
-Omarchy Quattro用の、キーボード中心のアウトライナーです。
-Roll、日付ごとのmemopad、項目へのズーム、色、検索、Undo/Redoに対応します。
-既存のWeb版・ターミナル版とはデータ互換性がありません。
+A keyboard-first outline editor for Omarchy Quattro. Organize nested items into Rolls and dated memos, search across the workspace, exchange Markdown, OPML, and plain-text files, and optionally connect an AI provider.
 
-## インストール・更新
-
-開発ディレクトリで次を実行します。既存プラグインをバックアップし、
-検証済みの実行ファイルだけをユーザー所有のプラグインディレクトリへ配置します。
-ソース側の編集は、インストールするまで実行中のアプリには反映されません。
+## Install
 
 ```sh
-python scripts/install.py
-omarchy plugin enable yozniax.flolinr
+omarchy plugin add https://github.com/yozniax/flolinr-omarchy.git --enable
+```
+
+## Use
+
+Click the Flolinr icon in the Omarchy bar, or open the panel from a terminal:
+
+```sh
 omarchy-shell shell summon yozniax.flolinr '{}'
 ```
 
-配置したファイルはシェルが自動再読み込みします。必要な場合のみ次を実行します。
+Use the keyboard-first outline editor to create and arrange items, zoom into a branch, or open **Today's Memo**. See [操作](#操作) for navigation and shortcuts.
+
+## Configure
+
+Open **Settings** in Flolinr to choose the interface language, workspace file, and optional AI connection. Flolinr runs inside Omarchy's shell with your user permissions. AI providers are contacted only when you explicitly run an AI action; configure a local CLI or API provider in Settings. Shortcut overrides can be saved in `~/.config/flolinr/keybindings.json`; see [キーバインドの変更](#キーバインドの変更). Notes and settings live outside the plugin directory and remain available if you remove the plugin.
+
+## Remove
 
 ```sh
-omarchy-shell shell rescanPlugins
+omarchy plugin remove yozniax.flolinr
 ```
-
-バーのアウトライン型アイコンを左クリックすると開閉します。
-指定のSVGを `flolinr.svg` として収録し、バーと見出しを同じ形状で描画します。
 
 ## データと設定
 
@@ -85,6 +88,8 @@ Enter、Tab/Shift+Tab、空行のBackspace、Alt+上下による枝移動、
 これらのキーをアプリのコマンドに割り当てると、標準編集操作を妨げる場合があります。
 
 ## 開発・検証
+
+For local development, `python scripts/install.py` validates the plugin and installs the current source into your user plugin directory. The script backs up the previous plugin version and leaves notes and settings untouched. This is for installing a working copy; normal users should install from the repository with `omarchy plugin add` above.
 
 ```sh
 node tests/model.test.cjs
@@ -325,3 +330,202 @@ SettingsのWorkspace file欄にBrowse…を追加しました。
 選択した時点ではPath欄の変更だけで、ファイルの作成・上書きは行いません。
 Save settingsで保存します。既存ファイルは上書きせず、新しい場所には現在の内容をコピーします。
 保存先を切り替えるにはシェル再読み込みが必要です。Pathの直接入力も引き続き使えます。
+
+## 0.13.2 — ボディのスクロール
+
+マウスホイール1ノッチの移動量を96pxにし、前後1画面分の行を先読みします。
+ピクセル単位の入力とタッチパッドは標準処理を維持します。
+1,600項目・複数行を含むQtテストで、ホイール操作、上下端、遅延生成を確認します。
+
+```sh
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_QUICK_CONTROLS_STYLE=Basic \
+  /usr/lib/qt6/bin/qmltestrunner -import tests/fixtures -input tests/tst_outlinescroll.qml
+```
+
+## 0.14.0 — AIでリッチなMarkdownへ変換
+
+AIの対象は、Zoomなしでは現在のRoll全体、Zoom中はその見出しと配下の枝だけです。
+折りたたんだ子項目も含み、Zoom外の枝は送りません。対象はAI画面のScopeで確認できます。
+
+AI → **Convert to Markdown**で、意味に応じた段落・見出し・表・引用・コードブロック・
+タスクリスト・リンク・脚注などを使うMarkdown文書を生成します。
+すべての記法を無理に使うのではなく、内容に合う表現をAIが選びます。
+プレビューを編集して **Save Markdown…** を押すと、ファイル選択画面で保存できます。
+このモードではApply previewを表示せず、元のOutlineは変更しません。
+
+AI操作を切り替えると以前のプレビューを破棄し、失敗した生成結果は適用・保存できません。
+保存キャンセル後や保存完了後もプレビューを保持します。
+
+## 0.15.0 — 表示言語と英語表記の整理
+
+**Settings → Language**で言語を選び、**Save settings**で保存します。
+English（既定）／日本語／简体中文／繁體中文／한국어／Español／Português／Français／Italiano
+の9言語に対応します。保存後すぐに反映し、次回起動時も選択を維持します。
+既存の設定ファイルに言語の指定がない場合はEnglishを使用します。
+
+サイドバー・設定・AI・検索・カレンダー・入出力・クイックメモ・ショートカットの
+ラベルと案内を翻訳し、日時と曜日も選択言語に合わせます。
+本文、Roll名、AIへの入力・出力は翻訳せず保持します。
+外部ツール由来の未知の診断文は原文を表示します。
+英語ではNodeをItemに統一し、Connection testをTest connection、
+Download .mdをデスクトップの操作に合わせてSave Markdown…に改めました。
+
+```sh
+node tests/translations.test.cjs
+python tests/test_language_settings.py
+```
+
+## 0.15.1 — Expandへの追加指示
+
+AI → Expandで追加指示欄を開き、Generate expansionで実行します。
+例：「具体例を3つ加える」「手順ごとに小さなタスクに分ける」などを指定できます。
+指示は任意・最大10,000文字で、Expandにだけ使用します。空欄なら従来どおり展開します。
+入力はダイアログ内で保持し、閉じると消去します。
+英語の日付メモ表示は、ご指定のToday's Memorandomに統一しました。
+既存メモの内容や保存形式は変更しません。
+
+## 0.16.0 — 画像・ファイル・コードの挿入とAI保護
+
+ノードに `/insert` を入力すると挿入モーダルが開きます。ファイル選択（全形式）または「Paste or Text」欄への入力に対応し、ファイル名の拡張子や入力内容から形式を自動判定します。
+Enterで候補を実行し、入力していたノードをその位置・インデントのまま挿入ブロックへ置き換えます。
+矢印キーで候補を選択でき、Escでキャンセルすると入力文字はそのまま残ります。
+
+- 三角ボタンで本文と子項目をまとめて展開・折りたたみできます。
+- Tab／Shift+TabとAlt+上下で挿入項目を移動できます。コード内の空白・タブは維持します。
+- HTML等は実行せずソース表示します。ファイル名は内容の下端右側に9px・薄い文字で表示します。
+- 下部には英語の **expand / collapse / delete** だけを表示します。折りたたんでもこの操作とファイル名は残ります。
+- ファイル名の右クリックメニューから **edit** と **save file** を使えます。**delete** は挿入内容を外し、ノードと子項目を残します。Ctrl+Zで戻せます。
+
+1ファイル2MBまで。テキスト／コードはUTF-8を使用します。画像プレビューは
+PNG／JPEG／GIF／WebP／BMPに対応し、SVGはXMLソースとして扱います。その他の形式は
+保存可能な添付ファイルとして挿入します。挿入元ファイルは変更せず、コピーを
+workspace JSON内に保存するため、元ファイルを移動しても表示が維持されます。
+
+### AIによる変更からの保護
+
+AIには挿入した内容・ファイル名を送らず、保護用の目印だけを渡します。
+Summarize／Expand／Reorderの適用時に、元の内容・ID・表示名・折りたたみ状態を
+復元します。目印の削除・変更・複製、保護項目のインデント変更がある結果は
+適用を拒否し、元のOutlineを保持します。MarkdownへのAI変換でも、
+AIの応答後にアプリが元の内容を埋め戻します。
+
+### ファイルとの往復
+
+RollのMarkdown出力には表示用の画像／コードと、復元用のコメントを含めます。
+OPML／Plaintextでもメタデータを保持し、Flolinrへ読み戻すと保護された挿入項目を
+復元します。Plaintextでは添付を含む項目を専用コメント形式で格納します。
+復元用コメントを他アプリで削除すると、添付の復元はできなくなります。
+入出力のJSONリクエスト・Markdown入力は32MBまでです。
+
+```sh
+node tests/attachments.test.cjs
+python tests/test_attachments.py
+python tests/test_attachment_flow.py
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_QUICK_CONTROLS_STYLE=Basic \
+  /usr/lib/qt6/bin/qmltestrunner -import tests/fixtures -input tests/tst_attachments.qml
+```
+
+## 0.16.1 — フラットなサイドバー
+
+今日のメモに📝、Rollsに📚を追加しました。Activeの中間階層・開閉用の矢印・
+リストの字下げを取り除き、Rolls直下に一覧を並べます。作成用の[+]はRolls見出しの隣へ移動し、
+アーカイブ済みRollも同じ左位置の独立したセクションに表示します。
+バージョンはFlolinrタイトルの下端に合わせ、タイトルとの間隔を8pxから4pxに変更しました。
+
+## 0.17.0 — ノード内のスラッシュコマンド
+
+挿入用の機能リンクを廃止し、ノード内の `/` コマンドに移しました。
+新しい子ノードを追加するのではなく、入力中のノードを同じID・深さで置き換え、
+その子項目も維持します。キャンセルや挿入先が変更された場合は上書きしません。
+ファイル名の見出しを廃止し、末尾右寄せの小さく薄い表示へ移しました。
+挿入物の下部はexpand / collapse / deleteの3操作に統一しました。
+
+### v0.17.1
+
+挿入を `/insert` に統一。全ファイル選択と貼り付けを同じモーダルにまとめ、形式を自動判定。左カラムの各Rollを字下げし、Versionは中央揃えに戻して10px右へ移動。
+
+### v0.17.2
+
+英語の今日メモ名を「Today's Memo」に短縮。左カラムのRollsは🗞️、Rollの標準アイコンは🧾（従来の標準📄も表示時に置換）。Importは📥、Calendarは📅、Settingsは⚙️を表示。
+
+## 0.18.0 — Roll order and sample manuals
+
+Drag a sidebar Roll onto the upper or lower half of another Roll to move it before
+or after that Roll. The insertion line marks the destination, and the order is saved.
+Active and archived Rolls reorder within their own sections; daily notes are unaffected.
+
+`StarterContent.js` contains the five default English manual Rolls (138 items),
+covering getting started, outline editing, daily workflows, files and Markdown, and
+AI tools. They include nested and folded branches, colored items, embedded Markdown,
+JSON, and an image. A new workspace starts with these Rolls; existing workspaces are
+never reseeded, so edited or deleted guides remain that way.
+
+## 0.19.0 — Default manuals and consistent collapse controls
+
+Embedded content now uses **expand / collapse / delete**. Starter content is
+separate from outline behavior and persistence: new workspace creation clones the
+five manual templates with fresh IDs and timestamps. Loading or migrating existing
+notes does not inject or reset guides. The same model loader is shared by JS tests.
+
+## 0.20.0 — Slash commands and 13 languages
+
+Type `/` in a standalone item, type to filter, use Up/Down to select, and press
+Enter to execute. Esc dismisses the menu without changing the item.
+
+| Command | Action |
+| --- | --- |
+| `/insert` | Choose any file or paste text/code; keep embedded content protected from AI. |
+| `/date` | Pick a date and insert it as YYYY-MM-DD. Today inserts immediately. |
+| `/link` | Link to a Roll or search for an individual item, including archived Rolls and dated notes. |
+| `/template` | Insert a meeting-notes, daily-review, or project-plan outline. |
+
+The command replaces the current item without discarding its children. Templates
+add their own children before existing descendants. Canceling a dialog preserves
+the command, and changed targets are rejected rather than overwritten.
+
+Date picker: arrows move by day/week, PgUp/PgDn change month, T selects today,
+and Enter inserts. Link picker: type a search, press Down to enter results,
+and Enter to choose. Template picker: Up/Down then Enter. Tab navigates controls.
+Links open with a click, Space or Ctrl+Enter when their row has focus; F2 edits a
+link. Backspace at the beginning of a task removes the task marker.
+
+Tasks, dates and internal links use plain text representations, so their
+content survives workspace and Markdown/OPML/plaintext round trips. Internal links
+refer to IDs in the same workspace; exporting a link does not copy its destination.
+Templates insert English content; their menu names follow the selected language.
+
+Added Dansk, Deutsch, Русский and Polski, including settings, help and errors.
+English remains the default and first option. The remaining languages are sorted
+by their English names: Chinese (Simplified/Traditional), Danish, French, German,
+Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish.
+Language codes, rather than menu positions, select translations and saved settings.
+
+## 0.21.0 — Focus recovery, editable templates and URL links
+
+Commands restore focus after the slash popup or modal closes. Text commands return
+the cursor to the changed item, templates focus their first inserted item, and
+non-text blocks retain keyboard focus. Canceling a modal returns to its source.
+Internal-link rows now use their visible one-line height rather than the hidden
+raw URI editor, removing the gap below links. The `/ai` command has been removed;
+the AI toolbar action remains available.
+
+Settings → Templates opens a template manager. Add, edit, delete or restore the
+built-in templates, then Save. Each template has a name and an outline with one
+item per line; two spaces or a Tab add one indentation level. Templates persist
+in settings.json and immediately populate `/template`. Template saves preserve
+language, AI connections and a newly selected workspace path, even before reload.
+
+HTTP and HTTPS URLs in ordinary items become clickable when the item is not being
+edited. Plain text around URLs is preserved, HTML is escaped, and embedded source
+is never linkified or executed. Click non-link text or use keyboard navigation to
+edit the original text again. Zoomed items also expose clickable URL links.
+
+## 0.22.0 — Simpler command menu and clearer settings
+
+Removed the `/todo` and `/divider` slash commands. Settings now groups Language,
+Templates, Workspace, and AI Connections with bold section headings and added spacing.
+
+
+## 0.23.0 — Deletable links and clearer dialogs
+
+Internal links created with `/link` now have a delete control that removes the linked outline item and its nested branch. The bold, spaced section-heading style is shared across settings, template editing, file insertion, shortcuts, calendar sections, and AI connection details; dialog titles use the same stronger hierarchy.

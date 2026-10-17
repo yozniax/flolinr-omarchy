@@ -8,12 +8,12 @@ import tempfile
 from urllib.parse import urlsplit, unquote
 from interchange import detect_format, FORMATS, import_opml, export_opml, import_plaintext, export_plaintext
 
-LIMIT = 2_000_000
+LIMIT = 32_000_000
 
 
 def run(request):
     operation = request['operation']
-    if operation in ('import', 'export', 'location'):
+    if operation in ('import', 'export', 'location', 'attachment_import', 'attachment_export'):
         raw_path = request['path']
         if raw_path.startswith('file:'):
             url = urlsplit(raw_path)
@@ -23,6 +23,23 @@ def run(request):
         path = Path(raw_path).expanduser()
         if not path.is_absolute():
             raise ValueError('Use an absolute file path (or ~/...)')
+        if operation == 'attachment_import':
+            from attachments import read_attachment
+            return {'attachment': read_attachment(path)}
+        if operation == 'attachment_export':
+            from attachments import attachment_bytes
+            if request.get('protectedPath') and path.resolve() == Path(request['protectedPath']).expanduser().resolve():
+                raise ValueError('Cannot export over the active workspace')
+            raw = attachment_bytes(request['attachment'])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, temporary = tempfile.mkstemp(prefix='.flolinr-attachment-', dir=path.parent)
+            try:
+                with os.fdopen(fd, 'wb') as stream:
+                    stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+                os.replace(temporary, path)
+            finally:
+                if os.path.exists(temporary): os.unlink(temporary)
+            return {'path': str(path)}
         if operation == 'location' and path.exists():
             with path.open(encoding='utf-8') as stream:
                 data = json.load(stream)
@@ -33,7 +50,7 @@ def run(request):
             with path.open(encoding='utf-8') as stream:
                 text = stream.read(LIMIT + 1)
             if len(text) > LIMIT:
-                raise ValueError('Import file exceeds 2 MB')
+                raise ValueError('Import file exceeds 32 MB')
             format = detect_format(path, request.get('format', 'auto'))
             if format == 'opml':
                 return {'format': format, **import_opml(text, path.stem)}
@@ -79,7 +96,7 @@ def main():
     try:
         raw = sys.stdin.read(LIMIT + 1)
         if len(raw) > LIMIT:
-            raise ValueError('Request exceeds 2 MB')
+            raise ValueError('Request exceeds 32 MB')
         print(json.dumps({'ok': True, **run(json.loads(raw))}, ensure_ascii=False))
     except Exception as error:
         print(json.dumps({'ok': False, 'error': str(error)}, ensure_ascii=False))

@@ -21,11 +21,11 @@ Item {
         // Always use Qt Quick's chooser for both import and export.
         options: Dialogs.FileDialog.DontUseNativeDialog
         parentWindow: root.Window.window
-        title: root.operation === "import" ? "Import as a new Roll" : "Export current Roll"
+        title: root.operation === "import" ? "📥 " + I18n.t("Import as a new Roll") : "📤 " + I18n.t("Export current Roll")
         fileMode: root.operation === "import" ? Dialogs.FileDialog.OpenFile : Dialogs.FileDialog.SaveFile
         nameFilters: root.operation === "import"
-            ? ["Supported files (*.opml *.md *.markdown *.txt *.text)", "OPML (*.opml)", "Markdown (*.md *.markdown)", "Plaintext (*.txt *.text)"]
-            : ["Markdown (*.md)", "OPML (*.opml)", "Plaintext (*.txt)"]
+            ? [I18n.t("Supported files (*.opml *.md *.markdown *.txt *.text)"), "OPML (*.opml)", "Markdown (*.md *.markdown)", I18n.t("Plaintext (*.txt *.text)")]
+            : ["Markdown (*.md)", "OPML (*.opml)", I18n.t("Plaintext (*.txt)")]
         defaultSuffix: root.operation === "export" ? ["md", "opml", "txt"][selectedNameFilter.index] || "md" : ""
         onAccepted: {
             var format = root.operation === "import"

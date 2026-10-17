@@ -16,7 +16,7 @@ Item {
     function saved() { input.text = ""; saving = false; error = ""; close(); }
     FloatingWindow {
         id: window
-        title: "Flolinr · Quick note"
+        title: "📝 " + I18n.t("Flolinr · Quick note")
         visible: false
         implicitWidth: 540
         implicitHeight: root.error ? 108 : 70
@@ -30,14 +30,14 @@ Item {
             TextField {
                 id: input
                 width: parent.width
-                placeholderText: root.saving ? "Saving…" : "Today’s note · Enter to save · Esc to cancel"
+                placeholderText: root.saving ? I18n.t("Saving…") : I18n.t("Today’s note · Enter to save · Esc to cancel")
                 enabled: root.ready && !root.saving
                 color: Commons.Color.foreground
                 maximumLength: 10000
                 onAccepted: if (text.trim()) root.submitted(text)
                 Keys.onEscapePressed: if (!root.saving) root.close()
             }
-            Label { width: parent.width; text: root.error; color: Commons.Color.foreground; visible: !!root.error; elide: Text.ElideRight; }
+            Label { width: parent.width; text: I18n.t(root.error); color: Commons.Color.foreground; visible: !!root.error; elide: Text.ElideRight; }
         }
     }
 }

@@ -11,10 +11,12 @@ import tempfile
 
 SOURCE = Path(__file__).resolve().parent.parent
 FILES = [
+    'ModalSection.qml', 'Templates.js', 'TemplateManager.qml', 'CommandActions.js', 'CommandDialog.qml', 'StarterContent.js', 'RollEntry.qml', 'SlashMenu.qml', 'attachments.py', 'AttachmentView.qml', 'AttachmentDialog.qml',
+    'qmldir', 'I18n.qml', 'Translations.js', 'EuropeanTranslations.js',
     'AiSettings.js', 'ai_backend.py',
     'FileTransfer.qml', 'interchange.py', 'CompactDialog.qml', 'ActionLink.qml', 'BarWidget.qml', 'Keybindings.js', 'KeyboardSettings.qml',
     'FlolinrIcon.qml', 'flolinr.svg', 'AppSettings.qml', 'QuickCapture.qml', 'FeaturePanel.qml', 'FeatureController.qml', 'bridge.py',
-    'Model.js', 'OutlineNode.qml', 'ShortcutsDialog.qml', 'WorkspaceStore.qml',
+    'Model.js', 'OutlineList.qml', 'OutlineNode.qml', 'ShortcutsDialog.qml', 'WorkspaceStore.qml',
     'LICENSE', 'README.md', 'keybindings.example.json',
     'docs/DEVELOPMENT.md', 'docs/HISTORY.md', 'Outliner.qml', 'manifest.json',
 ]

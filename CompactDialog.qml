@@ -6,7 +6,7 @@ import qs.Commons as Commons
 Dialog {
     id: root
     padding: 16
-    spacing: 10
+    spacing: 12
     font.family: Commons.Style.fontFamily
     font.pixelSize: 11
     font.weight: Font.Light
@@ -24,13 +24,13 @@ Dialog {
         text: root.title
         font.family: root.font.family
         font.pixelSize: 13
-        font.weight: Font.Light
+        font.weight: Font.DemiBold
         color: Commons.Color.foreground
-        opacity: 0.78
+        opacity: 0.9
         leftPadding: 16
         rightPadding: 16
-        topPadding: 14
-        bottomPadding: 8
+        topPadding: 16
+        bottomPadding: 10
         elide: Text.ElideRight
     }
 }
