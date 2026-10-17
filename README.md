@@ -118,7 +118,7 @@ memopadは通常のRoll一覧・Roll切り替えに混ぜず、Calendarの日付
 日付は作成・更新時刻から再計算せず固定され、後日追記しても元の日付に残ります。
 既存のmemopadデータは同じIDで引き継ぎます。空の今日メモを自動作成する処理は廃止しました。
 
-### どこからでも一行メモ
+### どこからでもTinyアウトライナー
 
 この端末では **Super+Ctrl+M** を追加しました。任意の端末からも呼べます。
 
@@ -126,7 +126,7 @@ memopadは通常のRoll一覧・Roll切り替えに混ぜず、Calendarの日付
 omarchy-shell shell summon yozniax.flolinr '{"mode":"capture"}'
 ```
 
-小さな入力欄に一行を入力し、Enterで今日の日付メモに追記します。
+小さなウィンドウにはFlolinrのアイコンとタイトルが表示されます。保存するたびに今日のメモへ`HH:MM`の時刻ノードを作り、入力内容をその子として追加します。Quick noteはEnterで一行を保存します。Outlineは複数行を入力でき、Tab / Shift+Tabで必要な深さまでネストできます。Checklistは同じアウトラインをチェックリストとして追加します。OutlineとChecklistはCtrl+EnterまたはSaveで保存します。
 保存成功後に閉じ、Escでキャンセルします。保存失敗時は入力を残し、再試行で二重追加しません。
 日付は端末のローカル日付です。通常の編集画面を開かずに使用できます。
 ホットキーとウィンドウサイズは `~/.config/hypr/bindings.lua` で変更できます。
@@ -529,3 +529,7 @@ Templates, Workspace, and AI Connections with bold section headings and added sp
 ## 0.23.0 — Deletable links and clearer dialogs
 
 Internal links created with `/link` now have a delete control that removes the linked outline item and its nested branch. The bold, spaced section-heading style is shared across settings, template editing, file insertion, shortcuts, calendar sections, and AI connection details; dialog titles use the same stronger hierarchy.
+
+## 0.24.0 — Tiny outline capture
+
+Super+Ctrl+M now opens a compact Flolinr capture window with Quick note, Outline, and Checklist modes. Each submission adds an `HH:MM` timestamp parent to today's memo and places the captured content beneath it. Outline and Checklist accept multiple lines and arbitrary valid nesting using Tab and Shift+Tab. The mini window includes a small Flolinr icon and wordmark.
